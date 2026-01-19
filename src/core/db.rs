@@ -159,7 +159,12 @@ impl Database {
         limit: usize,
     ) -> Result<Vec<SearchResult>> {
         let path_prefix_str = path_prefix.to_string_lossy();
-        let like_pattern = format!("{}%", path_prefix_str);
+        // Escape SQL LIKE special characters to prevent query manipulation
+        let escaped = path_prefix_str
+            .replace('\\', "\\\\")
+            .replace('%', "\\%")
+            .replace('_', "\\_");
+        let like_pattern = format!("{}%", escaped);
 
         let mut stmt = self.conn.prepare(
             r"SELECT c.id, c.file_id, f.path, c.content, c.start_line, c.end_line, c.embedding
