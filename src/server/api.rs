@@ -143,7 +143,20 @@ async fn health() -> impl IntoResponse {
 }
 
 async fn status(State(state): State<SharedState>) -> impl IntoResponse {
-    let db = match Database::new(&state.config.db_path().unwrap_or_default()) {
+    let db_path = match state.config.db_path() {
+        Ok(path) => path,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "error": format!("Failed to resolve database path: {}", e)
+                })),
+            )
+                .into_response();
+        }
+    };
+
+    let db = match Database::new(&db_path) {
         Ok(db) => db,
         Err(e) => {
             return (
@@ -228,7 +241,20 @@ async fn search(
     };
 
     // Search in database
-    let db = match Database::new(&state.config.db_path().unwrap_or_default()) {
+    let db_path = match state.config.db_path() {
+        Ok(path) => path,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "error": format!("Failed to resolve database path: {}", e)
+                })),
+            )
+                .into_response();
+        }
+    };
+
+    let db = match Database::new(&db_path) {
         Ok(db) => db,
         Err(e) => {
             return (
