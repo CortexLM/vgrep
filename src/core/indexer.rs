@@ -101,7 +101,11 @@ impl Indexer {
                     pending_files.push(pending);
                 }
                 Ok(None) => skipped += 1,
-                Err(_) => skipped += 1,
+                Err(e) => {
+                    let error_msg = format!("Failed to read file {}: {}", file_path.display(), e);
+                    pb.println(format!("    {} {}", ui::WARN, style(error_msg).yellow()));
+                    skipped += 1;
+                }
             }
 
             pb.inc(1);
@@ -469,7 +473,11 @@ impl ServerIndexer {
                     pending_files.push(pending);
                 }
                 Ok(None) => skipped += 1,
-                Err(_) => skipped += 1,
+                Err(e) => {
+                    let error_msg = format!("Failed to read file {}: {}", file_path.display(), e);
+                    pb.println(format!("    {} {}", ui::WARN, style(error_msg).yellow()));
+                    skipped += 1;
+                }
             }
 
             pb.inc(1);
