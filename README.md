@@ -390,11 +390,23 @@ Files are split into overlapping chunks for granular search:
 
 All settings can be overridden via environment:
 
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VGREP_HOST` | `127.0.0.1` | Server bind address |
+| `VGREP_PORT` | `7777` | Server port |
+| `VGREP_MAX_RESULTS` | `10` | Default number of search results |
+| `VGREP_CONTENT` | `false` | Show code snippets in results |
+| `VGREP_CHUNK_SIZE` | `512` | Characters per chunk when indexing |
+| `VGREP_CHUNK_OVERLAP` | `64` | Overlap between chunks in characters |
+| `VGREP_MAX_FILE_SIZE` | `524288` | Maximum file size to index in bytes (512KB) |
+| `VGREP_WATCH_DEBOUNCE` | `500` | File watcher debounce delay in milliseconds |
+
+Example usage:
+
 ```bash
-VGREP_HOST=0.0.0.0      # Bind to all interfaces
-VGREP_PORT=8080         # Custom port
-VGREP_MAX_RESULTS=20    # More results
-VGREP_CONTENT=true      # Always show snippets
+VGREP_HOST=0.0.0.0 VGREP_PORT=8080 vgrep serve  # Custom host/port
+VGREP_MAX_RESULTS=20 vgrep search "query"       # More results
+VGREP_CHUNK_SIZE=1024 vgrep index               # Larger chunks
 ```
 
 ---
