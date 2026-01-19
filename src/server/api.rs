@@ -10,7 +10,8 @@ use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use tower_http::cors::{Any, CorsLayer};
+use axum::http::{HeaderValue, Method};
+use tower_http::cors::CorsLayer;
 
 use crate::config::Config;
 use crate::core::{Database, EmbeddingEngine};
@@ -103,10 +104,19 @@ pub async fn run_server(config: &Config, host: &str, port: u16) -> Result<()> {
         config,
     });
 
+    // Restrict CORS to localhost origins only for security
+    // This prevents malicious websites from making cross-origin requests to the local server
+    let allowed_origins = [
+        "http://localhost".parse::<HeaderValue>().unwrap(),
+        "http://127.0.0.1".parse::<HeaderValue>().unwrap(),
+        format!("http://localhost:{}", port).parse::<HeaderValue>().unwrap(),
+        format!("http://127.0.0.1:{}", port).parse::<HeaderValue>().unwrap(),
+    ];
+    
     let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
+        .allow_origin(allowed_origins)
+        .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+        .allow_headers([axum::http::header::CONTENT_TYPE, axum::http::header::ACCEPT]);
 
     let app = Router::new()
         .route("/", get(root))
