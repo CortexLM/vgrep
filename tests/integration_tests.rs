@@ -59,3 +59,23 @@ fn test_config_show() {
         .success()
         .stdout(predicate::str::contains("Chunk size"));
 }
+
+#[test]
+fn test_search_empty_query_should_fail() {
+    vgrep()
+        .arg("search")
+        .arg("")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Search query cannot be empty"));
+}
+
+#[test]
+fn test_search_whitespace_query_should_fail() {
+    vgrep()
+        .arg("search")
+        .arg("   ")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Search query cannot be empty"));
+}

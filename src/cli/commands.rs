@@ -548,6 +548,12 @@ fn run_search_smart(
     interactive: bool,
     sync: bool,
 ) -> Result<()> {
+    let query = query.trim();
+    if query.is_empty() {
+        ui::print_error("Search query cannot be empty");
+        return Ok(());
+    }
+
     if sync {
         run_index(
             config,
