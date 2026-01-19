@@ -975,8 +975,9 @@ fn run_models(action: ModelsAction, config: &mut Config) -> Result<()> {
             );
             println!("     {} ~600MB", style("Size:").dim());
             println!(
-                "     {} https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF",
-                style("URL:").dim()
+                "     {} {}",
+                style("URL:").dim(),
+                ui::hyperlink("https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF", "https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF")
             );
             println!();
             println!(
@@ -990,8 +991,9 @@ fn run_models(action: ModelsAction, config: &mut Config) -> Result<()> {
             );
             println!("     {} ~400MB", style("Size:").dim());
             println!(
-                "     {} https://huggingface.co/sinjab/Qwen3-Reranker-0.6B-Q4_K_M-GGUF",
-                style("URL:").dim()
+                "     {} {}",
+                style("URL:").dim(),
+                ui::hyperlink("https://huggingface.co/sinjab/Qwen3-Reranker-0.6B-Q4_K_M-GGUF", "https://huggingface.co/sinjab/Qwen3-Reranker-0.6B-Q4_K_M-GGUF")
             );
             println!();
             println!("  Download with: {}", style("vgrep models download").cyan());

@@ -14,6 +14,17 @@ pub static EYE: Emoji<'_, '_> = Emoji("👁️  ", "");
 pub static SPARKLES: Emoji<'_, '_> = Emoji("✨ ", "");
 pub static BRAIN: Emoji<'_, '_> = Emoji("🧠 ", "");
 
+/// Create a clickable hyperlink using OSC 8 escape sequence.
+/// Falls back to plain text display in unsupporting terminals.
+pub fn hyperlink(url: &str, text: &str) -> String {
+    format!("\x1b]8;;{}\x07{}\x1b]8;;\x07", url, text)
+}
+
+/// Create a hyperlink where the URL is also the display text.
+pub fn hyperlink_url(url: &str) -> String {
+    hyperlink(url, url)
+}
+
 pub fn print_banner() {
     let banner = r#"
                                 
