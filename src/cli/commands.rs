@@ -872,7 +872,9 @@ fn run_models(action: ModelsAction, config: &mut Config) -> Result<()> {
                 config.set_embedding_model(embedding_path.to_string_lossy().to_string())?;
             }
 
-            if !embedding_only {
+            // Reranker is not yet implemented (requires separate backend)
+            // Only download if explicitly requested with --reranker-only
+            if reranker_only {
                 println!();
                 println!("  {}Downloading reranker model...", ui::DOWNLOAD);
                 println!(
@@ -882,6 +884,11 @@ fn run_models(action: ModelsAction, config: &mut Config) -> Result<()> {
                 println!(
                     "    {} huggingface.co/sinjab/Qwen3-Reranker-0.6B-Q4_K_M-GGUF",
                     style("From:").dim()
+                );
+                println!();
+                println!(
+                    "    {} Reranker is not yet implemented, downloading for future use",
+                    style("Note:").yellow()
                 );
                 println!();
 

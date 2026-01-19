@@ -160,7 +160,7 @@ fn default_context_size() -> usize {
 }
 
 fn default_use_reranker() -> bool {
-    true
+    false
 }
 
 impl Default for Config {

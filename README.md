@@ -384,7 +384,7 @@ Files are split into overlapping chunks for granular search:
 | `chunk_size` | `512` | Characters per chunk |
 | `chunk_overlap` | `64` | Overlap between chunks |
 | `n_threads` | `0` | CPU threads (0 = auto) |
-| `use_reranker` | `true` | Enable result reranking |
+| `use_reranker` | `false` | Enable result reranking (not yet implemented) |
 
 ### Environment Variables
 
@@ -483,7 +483,9 @@ vgrep/
 | Model | Size | Purpose |
 |-------|------|---------|
 | Qwen3-Embedding-0.6B-Q8_0 | ~600 MB | Text → Vector embeddings |
-| Qwen3-Reranker-0.6B-Q4_K_M | ~400 MB | Result reranking (optional) |
+| Qwen3-Reranker-0.6B-Q4_K_M | ~400 MB | Result reranking (not yet implemented) |
+
+The embedding model is downloaded by default with `vgrep models download`. The reranker model is reserved for future use and can be downloaded separately with `vgrep models download --reranker-only`.
 
 Models are downloaded to `~/.cache/huggingface/` and cached automatically.
 
