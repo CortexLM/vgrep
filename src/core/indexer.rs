@@ -342,7 +342,39 @@ impl Indexer {
         let mut char_count = 0;
 
         for (line_idx, line) in lines.iter().enumerate() {
-            let line_len = line.len() + 1;
+            let line_len = line.len() + 1; // +1 for newline
+
+            // If the line itself is larger than chunk size, we need to split it
+            if line_len > self.chunk_size {
+                // First flush current chunk if not empty
+                if !current_chunk.is_empty() {
+                    chunks.push(FileChunk {
+                        content: current_chunk.clone(),
+                        start_line: chunk_start_line as i32,
+                        end_line: (line_idx - 1) as i32,
+                    });
+                    current_chunk.clear();
+                    char_count = 0;
+                }
+
+                // Now split the long line
+                let mut start = 0;
+                while start < line.len() {
+                    let end = std::cmp::min(start + self.chunk_size, line.len());
+                    let part = &line[start..end];
+                    
+                    chunks.push(FileChunk {
+                        content: part.to_string() + "\n",
+                        start_line: line_idx as i32,
+                        end_line: line_idx as i32,
+                    });
+                    start = end;
+                }
+                
+                // After processing a forced split, reset start line for next regular accumulation
+                chunk_start_line = line_idx + 1;
+                continue;
+            }
 
             if char_count + line_len > self.chunk_size && !current_chunk.is_empty() {
                 chunks.push(FileChunk {
@@ -718,7 +750,39 @@ impl ServerIndexer {
         let mut char_count = 0;
 
         for (line_idx, line) in lines.iter().enumerate() {
-            let line_len = line.len() + 1;
+            let line_len = line.len() + 1; // +1 for newline
+
+            // If the line itself is larger than chunk size, we need to split it
+            if line_len > self.chunk_size {
+                // First flush current chunk if not empty
+                if !current_chunk.is_empty() {
+                    chunks.push(FileChunk {
+                        content: current_chunk.clone(),
+                        start_line: chunk_start_line as i32,
+                        end_line: (line_idx - 1) as i32,
+                    });
+                    current_chunk.clear();
+                    char_count = 0;
+                }
+
+                // Now split the long line
+                let mut start = 0;
+                while start < line.len() {
+                    let end = std::cmp::min(start + self.chunk_size, line.len());
+                    let part = &line[start..end];
+                    
+                    chunks.push(FileChunk {
+                        content: part.to_string() + "\n",
+                        start_line: line_idx as i32,
+                        end_line: line_idx as i32,
+                    });
+                    start = end;
+                }
+                
+                // After processing a forced split, reset start line for next regular accumulation
+                chunk_start_line = line_idx + 1;
+                continue;
+            }
 
             if char_count + line_len > self.chunk_size && !current_chunk.is_empty() {
                 chunks.push(FileChunk {
