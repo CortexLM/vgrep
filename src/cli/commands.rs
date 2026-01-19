@@ -40,6 +40,18 @@ pub struct Cli {
     /// Server port to use
     #[arg(short = 'p', long, global = true, env = "VGREP_PORT")]
     port: Option<u16>,
+
+    /// TLS certificate path (PEM)
+    #[arg(long, global = true, env = "VGREP_TLS_CERT")]
+    tls_cert: Option<PathBuf>,
+
+    /// TLS private key path (PEM)
+    #[arg(long, global = true, env = "VGREP_TLS_KEY")]
+    tls_key: Option<PathBuf>,
+
+    /// Allow serving plain HTTP on non-loopback interfaces (INSECURE)
+    #[arg(long, global = true, env = "VGREP_ALLOW_INSECURE_HTTP")]
+    allow_insecure_http: bool,
 }
 
 #[derive(Subcommand)]
@@ -314,7 +326,14 @@ impl Cli {
             Some(Commands::Serve { host, port }) => {
                 let host = host.unwrap_or_else(|| config.server_host.clone());
                 let port = port.unwrap_or(config.server_port);
-                run_serve(&config, host, port)
+                run_serve(
+                    &config,
+                    host,
+                    port,
+                    self.tls_cert,
+                    self.tls_key,
+                    self.allow_insecure_http,
+                )
             }
             Some(Commands::Status) => run_status(&config),
             Some(Commands::Models { action }) => run_models(action, &mut config),
@@ -748,9 +767,23 @@ fn run_watch(config: &Config, path: PathBuf) -> Result<()> {
     watcher.watch()
 }
 
-fn run_serve(config: &Config, host: String, port: u16) -> Result<()> {
+fn run_serve(
+    config: &Config,
+    host: String,
+    port: u16,
+    tls_cert_path: Option<PathBuf>,
+    tls_key_path: Option<PathBuf>,
+    allow_insecure_http: bool,
+) -> Result<()> {
     let rt = tokio::runtime::Runtime::new()?;
-    rt.block_on(server::run_server(config, &host, port))
+    rt.block_on(server::run_server(
+        config,
+        &host,
+        port,
+        tls_cert_path,
+        tls_key_path,
+        allow_insecure_http,
+    ))
 }
 
 fn run_status(config: &Config) -> Result<()> {

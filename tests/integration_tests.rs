@@ -59,3 +59,30 @@ fn test_config_show() {
         .success()
         .stdout(predicate::str::contains("Chunk size"));
 }
+
+#[test]
+fn test_serve_refuses_insecure_non_loopback_without_tls_or_override() {
+    let home = tempfile::tempdir().unwrap();
+
+    vgrep()
+        .env("HOME", home.path())
+        .env("VGREP_HOST", "0.0.0.0")
+        .arg("serve")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Refusing to bind to non-loopback"));
+}
+
+#[test]
+fn test_serve_allows_insecure_override() {
+    let home = tempfile::tempdir().unwrap();
+
+    vgrep()
+        .env("HOME", home.path())
+        .env("VGREP_HOST", "0.0.0.0")
+        .env("VGREP_ALLOW_INSECURE_HTTP", "true")
+        .arg("serve")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Embedding model not found"));
+}

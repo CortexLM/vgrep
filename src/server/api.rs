@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use axum::{
     extract::State,
     http::StatusCode,
@@ -7,7 +7,7 @@ use axum::{
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tower_http::cors::{Any, CorsLayer};
@@ -84,7 +84,43 @@ pub struct StatusResponse {
 
 type SharedState = Arc<ServerState>;
 
-pub async fn run_server(config: &Config, host: &str, port: u16) -> Result<()> {
+fn is_loopback_host(host: &str) -> bool {
+    if host.eq_ignore_ascii_case("localhost") {
+        return true;
+    }
+
+    host.parse::<IpAddr>().is_ok_and(|ip| ip.is_loopback())
+}
+
+pub async fn run_server(
+    config: &Config,
+    host: &str,
+    port: u16,
+    tls_cert_path: Option<PathBuf>,
+    tls_key_path: Option<PathBuf>,
+    allow_insecure_http: bool,
+) -> Result<()> {
+    let tls_paths = match (tls_cert_path, tls_key_path) {
+        (Some(cert), Some(key)) => Some((cert, key)),
+        (None, None) => None,
+        (Some(_), None) => {
+            anyhow::bail!(
+                "TLS certificate provided without TLS key. Provide --tls-key or set VGREP_TLS_KEY."
+            )
+        }
+        (None, Some(_)) => {
+            anyhow::bail!(
+                "TLS key provided without TLS certificate. Provide --tls-cert or set VGREP_TLS_CERT."
+            )
+        }
+    };
+
+    if !is_loopback_host(host) && tls_paths.is_none() && !allow_insecure_http {
+        anyhow::bail!(
+            "Refusing to bind to non-loopback address '{host}' without TLS. Configure TLS with --tls-cert/--tls-key (VGREP_TLS_CERT/VGREP_TLS_KEY) or set VGREP_ALLOW_INSECURE_HTTP=true to override."
+        );
+    }
+
     let config = config.clone();
 
     if !config.has_embedding_model() {
@@ -120,10 +156,23 @@ pub async fn run_server(config: &Config, host: &str, port: u16) -> Result<()> {
 
     let addr: SocketAddr = format!("{}:{}", host, port).parse()?;
 
-    crate::ui::print_server_banner(host, port);
+    crate::ui::print_server_banner(host, port, tls_paths.is_some());
 
-    let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app).await?;
+    match tls_paths {
+        Some((cert, key)) => {
+            let tls_config = axum_server::tls_rustls::RustlsConfig::from_pem_file(cert, key)
+                .await
+                .context("Failed to load TLS certificate/key")?;
+
+            axum_server::bind_rustls(addr, tls_config)
+                .serve(app.into_make_service())
+                .await?;
+        }
+        None => {
+            let listener = tokio::net::TcpListener::bind(addr).await?;
+            axum::serve(listener, app).await?;
+        }
+    }
 
     Ok(())
 }
