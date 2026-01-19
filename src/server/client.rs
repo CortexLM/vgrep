@@ -168,10 +168,34 @@ impl Client {
                     host_port
                 );
 
-                if stream.write_all(request.as_bytes()).is_ok() {
-                    return Ok(true);
+                if stream.write_all(request.as_bytes()).is_err() {
+                    return Ok(false);
                 }
-                Ok(false)
+
+                if stream.flush().is_err() {
+                    return Ok(false);
+                }
+
+                // Read and verify the HTTP response
+                let mut reader = BufReader::new(stream);
+                let mut status_line = String::new();
+
+                // Read the HTTP status line
+                if reader.read_line(&mut status_line).is_err() {
+                    return Ok(false);
+                }
+
+                // Verify we got a successful HTTP response (2xx status code)
+                // Status line format: "HTTP/1.1 200 OK\r\n"
+                let is_healthy = status_line.starts_with("HTTP/")
+                    && status_line
+                        .split_whitespace()
+                        .nth(1)
+                        .and_then(|code| code.parse::<u16>().ok())
+                        .map(|code| (200..300).contains(&code))
+                        .unwrap_or(false);
+
+                Ok(is_healthy)
             }
             Err(_) => Ok(false),
         }
