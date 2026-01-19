@@ -416,7 +416,19 @@ impl FileWatcher {
                 });
 
                 let overlap_start = if line_idx > 0 {
-                    line_idx.saturating_sub(self.config.chunk_overlap / 40)
+                    // Calculate how many lines we need to include to achieve
+                    // the desired character overlap
+                    let mut overlap_chars = 0;
+                    let mut overlap_lines = 0;
+                    for i in (0..line_idx).rev() {
+                        let line_char_len = lines[i].len() + 1; // +1 for newline
+                        if overlap_chars + line_char_len > self.config.chunk_overlap {
+                            break;
+                        }
+                        overlap_chars += line_char_len;
+                        overlap_lines += 1;
+                    }
+                    line_idx.saturating_sub(overlap_lines.max(1))
                 } else {
                     0
                 };
