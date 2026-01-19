@@ -34,12 +34,15 @@ pub fn print_banner() {
     println!();
 }
 
-pub fn print_server_banner(host: &str, port: u16) {
+pub fn print_server_banner(host: &str, port: u16, use_tls: bool) {
     print_banner();
+    let scheme = if use_tls { "https" } else { "http" };
     println!(
         "  {}Server listening on {}",
         SERVER,
-        style(format!("http://{}:{}", host, port)).green().bold()
+        style(format!("{}://{}:{}", scheme, host, port))
+            .green()
+            .bold()
     );
     println!();
     println!("  {}Endpoints:", GEAR);
