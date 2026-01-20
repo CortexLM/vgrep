@@ -98,8 +98,8 @@ impl Client {
             }
         }
 
-        // Read body
-        reader.read_to_string(&mut response)?;
+        // Read body with 10MB limit
+        reader.take(10 * 1024 * 1024).read_to_string(&mut response)?;
 
         let search_response: SearchResponse =
             serde_json::from_str(&response).context("Failed to parse server response")?;
@@ -146,8 +146,8 @@ impl Client {
             }
         }
 
-        // Read body
-        reader.read_to_string(&mut response)?;
+        // Read body with 10MB limit
+        reader.take(10 * 1024 * 1024).read_to_string(&mut response)?;
 
         let embed_response: EmbedBatchResponse =
             serde_json::from_str(&response).context("Failed to parse server response")?;
