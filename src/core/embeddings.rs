@@ -96,6 +96,11 @@ impl EmbeddingEngine {
                 .context("Failed to tokenize")?;
 
             let tokens: Vec<_> = if tokens.len() > self.n_ctx {
+                eprintln!(
+                    "Warning: Input text truncated from {} to {} tokens (context limit)",
+                    tokens.len(),
+                    self.n_ctx
+                );
                 tokens.into_iter().take(self.n_ctx).collect()
             } else {
                 tokens
