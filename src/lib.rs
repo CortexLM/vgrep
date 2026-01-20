@@ -18,6 +18,7 @@ pub mod core;
 pub mod server;
 pub mod ui;
 pub mod watcher;
+pub mod logging;
 
 pub use config::Config;
 pub use core::{Database, EmbeddingEngine, Indexer, SearchEngine, ServerIndexer};

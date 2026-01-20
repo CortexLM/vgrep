@@ -11,6 +11,7 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tower_http::cors::{Any, CorsLayer};
+use tracing::{error, info};
 
 use crate::config::Config;
 use crate::core::{Database, EmbeddingEngine};
@@ -93,8 +94,10 @@ pub async fn run_server(config: &Config, host: &str, port: u16) -> Result<()> {
 
     crate::ui::print_banner();
 
+    info!("Loading embedding model...");
     println!("  {}Loading embedding model...", crate::ui::BRAIN);
     let engine = EmbeddingEngine::new(&config)?;
+    info!("Model loaded successfully");
     println!("  {}Model loaded successfully!", crate::ui::CHECK);
     println!();
 
@@ -123,6 +126,7 @@ pub async fn run_server(config: &Config, host: &str, port: u16) -> Result<()> {
     crate::ui::print_server_banner(host, port);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
+    info!("Server listening on {}:{}", host, port);
     axum::serve(listener, app).await?;
 
     Ok(())
@@ -146,6 +150,7 @@ async fn status(State(state): State<SharedState>) -> impl IntoResponse {
     let db = match Database::new(&state.config.db_path().unwrap_or_default()) {
         Ok(db) => db,
         Err(e) => {
+            error!("Failed to open database: {}", e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({
@@ -159,6 +164,7 @@ async fn status(State(state): State<SharedState>) -> impl IntoResponse {
     let stats = match db.get_stats() {
         Ok(stats) => stats,
         Err(e) => {
+            error!("Failed to get stats: {}", e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({
@@ -216,6 +222,7 @@ async fn search(
         match engine.embed(&req.query) {
             Ok(emb) => emb,
             Err(e) => {
+                error!("Failed to generate embedding: {}", e);
                 return (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(serde_json::json!({
@@ -231,6 +238,7 @@ async fn search(
     let db = match Database::new(&state.config.db_path().unwrap_or_default()) {
         Ok(db) => db,
         Err(e) => {
+            error!("Failed to open database: {}", e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({
@@ -244,6 +252,7 @@ async fn search(
     let candidates = match db.search_similar(&query_embedding, &abs_path, req.max_results * 3) {
         Ok(c) => c,
         Err(e) => {
+            error!("Search failed: {}", e);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({
