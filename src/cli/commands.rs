@@ -531,7 +531,7 @@ fn run_index(
 
             let db = Database::new(&config.db_path()?)?;
             let engine = EmbeddingEngine::new(config)?;
-            let indexer = Indexer::new(db, engine, max_size);
+            let mut indexer = Indexer::new(db, engine, max_size);
             indexer.index_directory(&path, force)?;
         }
     }
@@ -670,7 +670,7 @@ fn run_search_local(
 
     let db = Database::new(&config.db_path()?)?;
     let engine = EmbeddingEngine::new(config)?;
-    let search = SearchEngine::new(db, engine, config, config.use_reranker)?;
+    let mut search = SearchEngine::new(db, engine, config, config.use_reranker)?;
 
     if interactive {
         let mut tui = SearchTui::new(search)?;
