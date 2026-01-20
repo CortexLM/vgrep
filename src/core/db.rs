@@ -194,7 +194,9 @@ impl Database {
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
 
-        results.truncate(limit * 3); // Get more for reranking
+        // Use saturating multiplication to prevent overflow
+        let effective_limit = limit.saturating_mul(3);
+        results.truncate(effective_limit); // Get more for reranking
         Ok(results)
     }
 
@@ -302,4 +304,31 @@ fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     }
 
     (dot / (norm_a.sqrt() * norm_b.sqrt())) as f32
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+    use std::panic::AssertUnwindSafe;
+
+    #[test]
+    fn test_search_similar_overflow() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test.db");
+        let db = Database::new(&db_path).unwrap();
+        
+        // Ensure checked_mul/saturating_mul is needed
+        let huge_limit = (usize::MAX / 3) + 1;
+        let query_embedding = vec![0.0; 10];
+        let path = Path::new("/");
+        
+        // This should NO LONGER panic
+        let db_ref = AssertUnwindSafe(&db);
+        let result = std::panic::catch_unwind(move || {
+            db_ref.search_similar(&query_embedding, path, huge_limit).unwrap();
+        });
+
+        assert!(result.is_ok());
+    }
 }
