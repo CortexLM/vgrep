@@ -46,8 +46,13 @@ pub struct Client {
 
 impl Client {
     pub fn new(host: &str, port: u16) -> Self {
+        // Sanitize host to prevent CRLF injection
+        let clean_host: String = host.chars()
+            .filter(|c| !matches!(c, '\r' | '\n' | '\0'))
+            .collect();
+            
         Self {
-            base_url: format!("http://{}:{}", host, port),
+            base_url: format!("http://{}:{}", clean_host, port),
         }
     }
 
