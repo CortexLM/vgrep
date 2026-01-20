@@ -101,21 +101,21 @@ impl FileWatcher {
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
                     // Check if we should process pending files
                     let should_process = {
-                        let last = last_process.lock().unwrap();
-                        let pending = pending_files.lock().unwrap();
+                        let last = last_process.lock().unwrap_or_else(|e| e.into_inner());
+                        let pending = pending_files.lock().unwrap_or_else(|e| e.into_inner());
                         !pending.is_empty() && last.elapsed() >= debounce_duration
                     };
 
                     if should_process {
                         let files_to_process: Vec<PathBuf> = {
-                            let mut pending = pending_files.lock().unwrap();
+                            let mut pending = pending_files.lock().unwrap_or_else(|e| e.into_inner());
                             let files: Vec<_> = pending.drain().collect();
                             files
                         };
 
                         if !files_to_process.is_empty() {
                             self.process_files(&files_to_process)?;
-                            *last_process.lock().unwrap() = Instant::now();
+                            *last_process.lock().unwrap_or_else(|e| e.into_inner()) = Instant::now();
                         }
                     }
                 }
@@ -139,7 +139,7 @@ impl FileWatcher {
     ) -> Result<()> {
         match &event.kind {
             EventKind::Create(_) | EventKind::Modify(_) | EventKind::Remove(_) => {
-                let mut pending = pending_files.lock().unwrap();
+                let mut pending = pending_files.lock().unwrap_or_else(|e| e.into_inner());
                 for path in &event.paths {
                     if self.should_index(path) {
                         pending.insert(path.clone());
