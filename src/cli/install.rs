@@ -380,7 +380,7 @@ if __name__ == "__main__":
             "matcher": "startup|resume",
             "hooks": [{
                 "type": "command",
-                "command": format!("python3 \"{}\"", watch_py.display()),
+                "command": ["python3", watch_py.to_string_lossy()],
                 "timeout": 10
             }]
         });
@@ -399,7 +399,7 @@ if __name__ == "__main__":
         let hook_entry = serde_json::json!({
             "hooks": [{
                 "type": "command",
-                "command": format!("python3 \"{}\"", kill_py.display()),
+                "command": ["python3", kill_py.to_string_lossy()],
                 "timeout": 10
             }]
         });
