@@ -45,10 +45,11 @@ impl SearchEngine {
         // Generate query embedding
         let query_embedding = self.embedding_engine.embed(query)?;
 
-        // Search for similar chunks
+        // Search for similar chunks with overflow protection
+        let limit = max_results.saturating_mul(3);
         let candidates = self
             .db
-            .search_similar(&query_embedding, &abs_path, max_results * 3)?;
+            .search_similar(&query_embedding, &abs_path, limit)?;
 
         if candidates.is_empty() {
             return Ok(Vec::new());
