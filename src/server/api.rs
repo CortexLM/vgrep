@@ -191,6 +191,16 @@ async fn search(
     State(state): State<SharedState>,
     Json(req): Json<SearchRequest>,
 ) -> impl IntoResponse {
+    if req.query.trim().is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "error": "Query cannot be empty or whitespace only"
+            })),
+        )
+            .into_response();
+    }
+
     let path = req
         .path
         .map(PathBuf::from)
@@ -303,6 +313,16 @@ async fn embed(
     State(state): State<SharedState>,
     Json(req): Json<EmbedRequest>,
 ) -> impl IntoResponse {
+    if req.text.trim().is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "error": "Text cannot be empty or whitespace only"
+            })),
+        )
+            .into_response();
+    }
+
     let engine = match state.embedding_engine.lock() {
         Ok(e) => e,
         Err(e) => {
@@ -339,6 +359,16 @@ async fn embed_batch(
     State(state): State<SharedState>,
     Json(req): Json<EmbedBatchRequest>,
 ) -> impl IntoResponse {
+    if req.texts.is_empty() || req.texts.iter().all(|s| s.trim().is_empty()) {
+         return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "error": "Batch texts cannot be empty or contain only empty strings"
+            })),
+        )
+            .into_response();
+    }
+
     let engine = match state.embedding_engine.lock() {
         Ok(e) => e,
         Err(e) => {
