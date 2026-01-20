@@ -241,7 +241,10 @@ async fn search(
         }
     };
 
-    let candidates = match db.search_similar(&query_embedding, &abs_path, req.max_results * 3) {
+    // Limit max_results to prevent DoS/OOM
+    let max_results = req.max_results.min(1000);
+
+    let candidates = match db.search_similar(&query_embedding, &abs_path, max_results * 3) {
         Ok(c) => c,
         Err(e) => {
             return (
@@ -287,7 +290,7 @@ async fn search(
             .unwrap_or(std::cmp::Ordering::Equal)
     });
 
-    results.truncate(req.max_results);
+    results.truncate(max_results);
 
     let total = results.len();
 
