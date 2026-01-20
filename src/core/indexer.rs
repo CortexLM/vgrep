@@ -138,6 +138,14 @@ impl Indexer {
 
         let all_embeddings = self.engine.embed_batch(&all_chunks)?;
 
+        if all_embeddings.len() != all_chunks.len() {
+            return Err(anyhow::anyhow!(
+                "Embedding count mismatch: expected {}, got {}",
+                all_chunks.len(),
+                all_embeddings.len()
+            ));
+        }
+
         pb.finish_and_clear();
         println!(
             "    {}Generated {} embeddings",
@@ -513,8 +521,25 @@ impl ServerIndexer {
         for batch in all_chunks.chunks(batch_size) {
             let batch_refs: Vec<&str> = batch.iter().map(|s| s.as_str()).collect();
             let embeddings = self.client.embed_batch(&batch_refs)?;
+            
+            if embeddings.len() != batch.len() {
+                return Err(anyhow::anyhow!(
+                    "Embedding count mismatch in batch: expected {}, got {}",
+                    batch.len(),
+                    embeddings.len()
+                ));
+            }
+
             all_embeddings.extend(embeddings);
             pb.inc(batch.len() as u64);
+        }
+
+        if all_embeddings.len() != all_chunks.len() {
+             return Err(anyhow::anyhow!(
+                "Total embedding count mismatch: expected {}, got {}",
+                all_chunks.len(),
+                all_embeddings.len()
+            ));
         }
 
         pb.finish_and_clear();
