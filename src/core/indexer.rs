@@ -42,7 +42,7 @@ impl Indexer {
         }
     }
 
-    pub fn index_directory(&self, path: &Path, force: bool) -> Result<()> {
+    pub fn index_directory(&mut self, path: &Path, force: bool) -> Result<()> {
         let abs_path = fs::canonicalize(path).context("Failed to resolve path")?;
 
         println!(

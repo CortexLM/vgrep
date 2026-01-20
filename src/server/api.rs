@@ -200,7 +200,7 @@ async fn search(
 
     // Generate query embedding
     let query_embedding = {
-        let engine = match state.embedding_engine.lock() {
+        let mut engine = match state.embedding_engine.lock() {
             Ok(e) => e,
             Err(e) => {
                 return (
@@ -303,7 +303,7 @@ async fn embed(
     State(state): State<SharedState>,
     Json(req): Json<EmbedRequest>,
 ) -> impl IntoResponse {
-    let engine = match state.embedding_engine.lock() {
+    let mut engine = match state.embedding_engine.lock() {
         Ok(e) => e,
         Err(e) => {
             return (
@@ -339,7 +339,7 @@ async fn embed_batch(
     State(state): State<SharedState>,
     Json(req): Json<EmbedBatchRequest>,
 ) -> impl IntoResponse {
-    let engine = match state.embedding_engine.lock() {
+    let mut engine = match state.embedding_engine.lock() {
         Ok(e) => e,
         Err(e) => {
             return (

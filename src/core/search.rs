@@ -35,7 +35,7 @@ impl SearchEngine {
     }
 
     pub fn search(
-        &self,
+        &mut self,
         query: &str,
         path: &Path,
         max_results: usize,
@@ -90,12 +90,12 @@ impl SearchEngine {
         Ok(results)
     }
 
-    pub fn search_interactive(&self, query: &str, max_results: usize) -> Result<Vec<SearchResult>> {
+    pub fn search_interactive(&mut self, query: &str, max_results: usize) -> Result<Vec<SearchResult>> {
         let cwd = std::env::current_dir()?;
         self.search(query, &cwd, max_results)
     }
 
-    pub fn embed(&self, text: &str) -> Result<Vec<f32>> {
+    pub fn embed(&mut self, text: &str) -> Result<Vec<f32>> {
         self.embedding_engine.embed(text)
     }
 }

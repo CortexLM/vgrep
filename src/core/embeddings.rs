@@ -19,11 +19,22 @@ fn suppress_llama_logs() {
     });
 }
 
-pub struct EmbeddingEngine {
+struct EngineResources {
     backend: LlamaBackend,
     model: LlamaModel,
+}
+
+pub struct EmbeddingEngine {
+    // IMPORTANT: ctx must be defined before resources to ensure it is dropped first.
+    // ctx borrows from model/backend which are in resources.
+    ctx: Option<llama_cpp_2::context::LlamaContext<'static>>,
+    resources: Box<EngineResources>,
     n_ctx: usize,
 }
+
+// Ensure we can send it across threads (Mutex wrapper requires this)
+// LlamaContext wraps a pointer and is generally thread-safe to move but not to share.
+unsafe impl Send for EmbeddingEngine {}
 
 impl EmbeddingEngine {
     pub fn new(config: &Config) -> Result<Self> {
@@ -41,26 +52,36 @@ impl EmbeddingEngine {
         let model = LlamaModel::load_from_file(&backend, model_path, &model_params)
             .context("Failed to load embedding model")?;
 
+        let resources = Box::new(EngineResources { backend, model });
+
         let ctx_params = LlamaContextParams::default()
             .with_n_threads_batch(n_threads)
             .with_n_threads(n_threads)
             .with_embeddings(true);
 
-        let ctx = model
-            .new_context(&backend, ctx_params)
-            .context("Failed to create context")?;
+        // SAFETY: We are creating a self-referential struct.
+        // 1. `resources` is boxed, so its address is stable.
+        // 2. We extend the lifetime of `model` to 'static temporarily to create `ctx`.
+        // 3. We store `ctx` in the same struct.
+        // 4. `ctx` is dropped BEFORE `resources` because it is declared earlier in the struct.
+        let ctx = unsafe {
+            let model_ref: &'static LlamaModel = std::mem::transmute(&resources.model);
+            let backend_ref: &'static LlamaBackend = std::mem::transmute(&resources.backend);
+            model_ref
+                .new_context(backend_ref, ctx_params)
+                .context("Failed to create context")?
+        };
 
         let n_ctx = std::cmp::min(ctx.n_ctx() as usize, context_size);
-        drop(ctx);
 
         Ok(Self {
-            backend,
-            model,
+            ctx: Some(ctx),
+            resources,
             n_ctx,
         })
     }
 
-    pub fn embed(&self, text: &str) -> Result<Vec<f32>> {
+    pub fn embed(&mut self, text: &str) -> Result<Vec<f32>> {
         let embeddings = self.embed_batch(&[text])?;
         embeddings
             .into_iter()
@@ -68,29 +89,16 @@ impl EmbeddingEngine {
             .context("No embedding generated")
     }
 
-    pub fn embed_batch(&self, texts: &[&str]) -> Result<Vec<Vec<f32>>> {
+    pub fn embed_batch(&mut self, texts: &[&str]) -> Result<Vec<Vec<f32>>> {
         if texts.is_empty() {
             return Ok(Vec::new());
         }
-
-        let n_threads = std::thread::available_parallelism()
-            .map(|p| p.get() as i32)
-            .unwrap_or(4);
-
-        let ctx_params = LlamaContextParams::default()
-            .with_n_threads_batch(n_threads)
-            .with_n_threads(n_threads)
-            .with_embeddings(true);
-
-        let mut ctx = self
-            .model
-            .new_context(&self.backend, ctx_params)
-            .context("Failed to create context")?;
 
         let mut results = Vec::with_capacity(texts.len());
 
         for text in texts {
             let tokens = self
+                .resources
                 .model
                 .str_to_token(text, AddBos::Always)
                 .context("Failed to tokenize")?;
@@ -101,7 +109,8 @@ impl EmbeddingEngine {
                 tokens
             };
 
-            let embedding = self.process_tokens(&mut ctx, &tokens)?;
+            let ctx = self.ctx.as_mut().context("Context not initialized")?;
+            let embedding = Self::process_tokens(self.n_ctx, ctx, &tokens)?;
             results.push(embedding);
         }
 
@@ -109,11 +118,11 @@ impl EmbeddingEngine {
     }
 
     fn process_tokens(
-        &self,
+        n_ctx: usize,
         ctx: &mut llama_cpp_2::context::LlamaContext,
         tokens: &[llama_cpp_2::token::LlamaToken],
     ) -> Result<Vec<f32>> {
-        let mut batch = LlamaBatch::new(self.n_ctx, 1);
+        let mut batch = LlamaBatch::new(n_ctx, 1);
         batch.add_sequence(tokens, 0, false)?;
 
         ctx.clear_kv_cache();
@@ -127,7 +136,7 @@ impl EmbeddingEngine {
     }
 
     pub fn embedding_dim(&self) -> usize {
-        self.model.n_embd() as usize
+        self.resources.model.n_embd() as usize
     }
 }
 
