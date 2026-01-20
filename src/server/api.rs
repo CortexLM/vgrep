@@ -18,6 +18,7 @@ use crate::core::{Database, EmbeddingEngine};
 pub struct ServerState {
     embedding_engine: Mutex<EmbeddingEngine>,
     config: Config,
+    db: Mutex<Database>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -98,9 +99,12 @@ pub async fn run_server(config: &Config, host: &str, port: u16) -> Result<()> {
     println!("  {}Model loaded successfully!", crate::ui::CHECK);
     println!();
 
+    let db = Database::new(&config.db_path().unwrap_or_default())?;
+
     let state = Arc::new(ServerState {
         embedding_engine: Mutex::new(engine),
         config,
+        db: Mutex::new(db),
     });
 
     let cors = CorsLayer::new()
@@ -143,13 +147,13 @@ async fn health() -> impl IntoResponse {
 }
 
 async fn status(State(state): State<SharedState>) -> impl IntoResponse {
-    let db = match Database::new(&state.config.db_path().unwrap_or_default()) {
+    let db = match state.db.lock() {
         Ok(db) => db,
         Err(e) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({
-                    "error": format!("Failed to open database: {}", e)
+                    "error": format!("Failed to lock database: {}", e)
                 })),
             )
                 .into_response();
@@ -228,13 +232,13 @@ async fn search(
     };
 
     // Search in database
-    let db = match Database::new(&state.config.db_path().unwrap_or_default()) {
+    let db = match state.db.lock() {
         Ok(db) => db,
         Err(e) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({
-                    "error": format!("Failed to open database: {}", e)
+                    "error": format!("Failed to lock database: {}", e)
                 })),
             )
                 .into_response();
