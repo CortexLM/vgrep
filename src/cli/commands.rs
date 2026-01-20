@@ -134,6 +134,12 @@ enum Commands {
         action: Option<ConfigAction>,
     },
 
+    /// Manage file extensions
+    Extensions {
+        #[command(subcommand)]
+        action: ExtensionsAction,
+    },
+
     /// Install vgrep integration for coding agents
     Install {
         #[command(subcommand)]
@@ -219,6 +225,24 @@ enum ConfigAction {
 
     /// Show config file path
     Path,
+}
+
+#[derive(Subcommand)]
+enum ExtensionsAction {
+    /// List configured extensions
+    List,
+
+    /// Add an extension to the list
+    Add {
+        /// Extension to add (e.g. "rs", ".txt")
+        extension: String,
+    },
+
+    /// Remove an extension from the list
+    Remove {
+        /// Extension to remove
+        extension: String,
+    },
 }
 
 #[derive(Clone, ValueEnum)]
@@ -319,6 +343,7 @@ impl Cli {
             Some(Commands::Status) => run_status(&config),
             Some(Commands::Models { action }) => run_models(action, &mut config),
             Some(Commands::Config { action }) => run_config(action, &mut config),
+            Some(Commands::Extensions { action }) => run_extensions(action, &mut config),
             Some(Commands::Install { agent }) => match agent {
                 InstallAgent::ClaudeCode => super::install::install_claude_code(),
                 InstallAgent::Opencode => super::install::install_opencode(),
@@ -516,7 +541,7 @@ fn run_index(
             }
 
             let db = Database::new(&config.db_path()?)?;
-            let indexer = ServerIndexer::new(db, client, max_size);
+            let indexer = ServerIndexer::new(db, client, config.clone());
             indexer.index_directory(&path, force)?;
         }
         Mode::Local => {
@@ -531,7 +556,7 @@ fn run_index(
 
             let db = Database::new(&config.db_path()?)?;
             let engine = EmbeddingEngine::new(config)?;
-            let indexer = Indexer::new(db, engine, max_size);
+            let indexer = Indexer::new(db, engine, config.clone());
             indexer.index_directory(&path, force)?;
         }
     }
@@ -999,6 +1024,70 @@ fn run_models(action: ModelsAction, config: &mut Config) -> Result<()> {
         }
     }
 
+    Ok(())
+}
+
+fn run_extensions(action: ExtensionsAction, config: &mut Config) -> Result<()> {
+    match action {
+        ExtensionsAction::List => {
+            ui::print_header("Configured Extensions");
+            
+            if config.extensions.is_empty() {
+                println!("  {} No extensions configured (using hardcoded defaults?)", ui::WARN);
+                return Ok(());
+            }
+
+            // Group by first letter for better readability, or just list them sorted
+            let mut extensions = config.extensions.clone();
+            extensions.sort();
+
+            println!("  {}", style("Extensions allowlist:").bold());
+            let mut current_line = String::from("    ");
+            
+            for (i, ext) in extensions.iter().enumerate() {
+                let item = format!(".{}", ext);
+                if current_line.len() + item.len() > 80 {
+                    println!("{}", current_line);
+                    current_line = String::from("    ");
+                }
+                current_line.push_str(&item);
+                if i < extensions.len() - 1 {
+                    current_line.push_str(", ");
+                }
+            }
+            if !current_line.trim().is_empty() {
+                println!("{}", current_line);
+            }
+            println!();
+            
+            println!(
+                "  Add more with: {}",
+                style("vgrep extensions add .custom").cyan()
+            );
+            println!();
+        }
+        ExtensionsAction::Add { extension } => {
+            let ext = extension.trim_start_matches('.').to_lowercase();
+            if config.extensions.contains(&ext) {
+                ui::print_warning(&format!("Extension '.{}' is already in the list", ext));
+                return Ok(());
+            }
+
+            config.extensions.push(ext.clone());
+            config.save()?;
+            ui::print_success(&format!("Added extension '.{}'", ext));
+        }
+        ExtensionsAction::Remove { extension } => {
+            let ext = extension.trim_start_matches('.').to_lowercase();
+            if let Some(pos) = config.extensions.iter().position(|e| e == &ext) {
+                config.extensions.remove(pos);
+                config.save()?;
+                ui::print_success(&format!("Removed extension '.{}'", ext));
+            } else {
+                ui::print_warning(&format!("Extension '.{}' was not in the list", ext));
+            }
+        }
+    }
     Ok(())
 }
 

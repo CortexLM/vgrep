@@ -8,14 +8,13 @@ use std::path::{Path, PathBuf};
 
 use super::db::Database;
 use super::embeddings::EmbeddingEngine;
+use crate::config::Config;
 use crate::ui;
 
 pub struct Indexer {
     db: Database,
     engine: EmbeddingEngine,
-    max_file_size: u64,
-    chunk_size: usize,
-    chunk_overlap: usize,
+    config: Config,
 }
 
 #[derive(Clone)]
@@ -32,13 +31,11 @@ struct PendingFile {
 }
 
 impl Indexer {
-    pub fn new(db: Database, engine: EmbeddingEngine, max_file_size: u64) -> Self {
+    pub fn new(db: Database, engine: EmbeddingEngine, config: Config) -> Self {
         Self {
             db,
             engine,
-            max_file_size,
-            chunk_size: 512,
-            chunk_overlap: 64,
+            config,
         }
     }
 
@@ -237,7 +234,7 @@ impl Indexer {
 
     fn should_index(&self, path: &Path) -> bool {
         if let Ok(metadata) = fs::metadata(path) {
-            if metadata.len() > self.max_file_size {
+            if metadata.len() > self.config.max_file_size {
                 return false;
             }
         }
@@ -248,66 +245,14 @@ impl Indexer {
             .unwrap_or("")
             .to_lowercase();
 
+        // Check if extension is in configured list
+        if self.config.extensions.iter().any(|e| e.to_lowercase() == ext) {
+            return true;
+        }
+
         matches!(
             ext.as_str(),
-            "rs" | "py"
-                | "js"
-                | "ts"
-                | "tsx"
-                | "jsx"
-                | "go"
-                | "c"
-                | "cpp"
-                | "h"
-                | "hpp"
-                | "java"
-                | "kt"
-                | "swift"
-                | "rb"
-                | "php"
-                | "cs"
-                | "fs"
-                | "scala"
-                | "clj"
-                | "ex"
-                | "exs"
-                | "erl"
-                | "hs"
-                | "ml"
-                | "lua"
-                | "r"
-                | "jl"
-                | "dart"
-                | "vue"
-                | "svelte"
-                | "astro"
-                | "html"
-                | "htm"
-                | "css"
-                | "scss"
-                | "sass"
-                | "less"
-                | "json"
-                | "yaml"
-                | "yml"
-                | "toml"
-                | "xml"
-                | "md"
-                | "markdown"
-                | "txt"
-                | "rst"
-                | "tex"
-                | "sh"
-                | "bash"
-                | "zsh"
-                | "fish"
-                | "ps1"
-                | "bat"
-                | "cmd"
-                | "sql"
-                | "graphql"
-                | "proto"
-                | ""
+            "" // Allow extensionless files if they are in the special filenames list
         ) || path.file_name().is_some_and(|n| {
             let name = n.to_string_lossy().to_lowercase();
             matches!(
@@ -344,7 +289,7 @@ impl Indexer {
         for (line_idx, line) in lines.iter().enumerate() {
             let line_len = line.len() + 1;
 
-            if char_count + line_len > self.chunk_size && !current_chunk.is_empty() {
+            if char_count + line_len > self.config.chunk_size && !current_chunk.is_empty() {
                 chunks.push(FileChunk {
                     content: current_chunk.clone(),
                     start_line: chunk_start_line as i32,
@@ -352,7 +297,7 @@ impl Indexer {
                 });
 
                 let overlap_start = if line_idx > 0 {
-                    line_idx.saturating_sub(self.chunk_overlap / 40)
+                    line_idx.saturating_sub(self.config.chunk_overlap / 40)
                 } else {
                     0
                 };
@@ -394,19 +339,15 @@ fn compute_hash(content: &str) -> String {
 pub struct ServerIndexer {
     db: Database,
     client: crate::server::Client,
-    max_file_size: u64,
-    chunk_size: usize,
-    chunk_overlap: usize,
+    config: Config,
 }
 
 impl ServerIndexer {
-    pub fn new(db: Database, client: crate::server::Client, max_file_size: u64) -> Self {
+    pub fn new(db: Database, client: crate::server::Client, config: Config) -> Self {
         Self {
             db,
             client,
-            max_file_size,
-            chunk_size: 512,
-            chunk_overlap: 64,
+            config,
         }
     }
 
@@ -613,7 +554,7 @@ impl ServerIndexer {
 
     fn should_index(&self, path: &Path) -> bool {
         if let Ok(metadata) = fs::metadata(path) {
-            if metadata.len() > self.max_file_size {
+            if metadata.len() > self.config.max_file_size {
                 return false;
             }
         }
@@ -624,66 +565,14 @@ impl ServerIndexer {
             .unwrap_or("")
             .to_lowercase();
 
+        // Check if extension is in configured list
+        if self.config.extensions.iter().any(|e| e.to_lowercase() == ext) {
+            return true;
+        }
+
         matches!(
             ext.as_str(),
-            "rs" | "py"
-                | "js"
-                | "ts"
-                | "tsx"
-                | "jsx"
-                | "go"
-                | "c"
-                | "cpp"
-                | "h"
-                | "hpp"
-                | "java"
-                | "kt"
-                | "swift"
-                | "rb"
-                | "php"
-                | "cs"
-                | "fs"
-                | "scala"
-                | "clj"
-                | "ex"
-                | "exs"
-                | "erl"
-                | "hs"
-                | "ml"
-                | "lua"
-                | "r"
-                | "jl"
-                | "dart"
-                | "vue"
-                | "svelte"
-                | "astro"
-                | "html"
-                | "htm"
-                | "css"
-                | "scss"
-                | "sass"
-                | "less"
-                | "json"
-                | "yaml"
-                | "yml"
-                | "toml"
-                | "xml"
-                | "md"
-                | "markdown"
-                | "txt"
-                | "rst"
-                | "tex"
-                | "sh"
-                | "bash"
-                | "zsh"
-                | "fish"
-                | "ps1"
-                | "bat"
-                | "cmd"
-                | "sql"
-                | "graphql"
-                | "proto"
-                | ""
+            "" // Allow extensionless files if they are in the special filenames list
         ) || path.file_name().is_some_and(|n| {
             let name = n.to_string_lossy().to_lowercase();
             matches!(
@@ -720,7 +609,7 @@ impl ServerIndexer {
         for (line_idx, line) in lines.iter().enumerate() {
             let line_len = line.len() + 1;
 
-            if char_count + line_len > self.chunk_size && !current_chunk.is_empty() {
+            if char_count + line_len > self.config.chunk_size && !current_chunk.is_empty() {
                 chunks.push(FileChunk {
                     content: current_chunk.clone(),
                     start_line: chunk_start_line as i32,
@@ -728,7 +617,7 @@ impl ServerIndexer {
                 });
 
                 let overlap_start = if line_idx > 0 {
-                    line_idx.saturating_sub(self.chunk_overlap / 40)
+                    line_idx.saturating_sub(self.config.chunk_overlap / 40)
                 } else {
                     0
                 };

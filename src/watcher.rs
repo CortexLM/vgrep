@@ -182,66 +182,14 @@ impl FileWatcher {
             .unwrap_or("")
             .to_lowercase();
 
+        // Check if extension is in configured list
+        if self.config.extensions.iter().any(|e| e.to_lowercase() == ext) {
+            return true;
+        }
+
         matches!(
             ext.as_str(),
-            "rs" | "py"
-                | "js"
-                | "ts"
-                | "tsx"
-                | "jsx"
-                | "go"
-                | "c"
-                | "cpp"
-                | "h"
-                | "hpp"
-                | "java"
-                | "kt"
-                | "swift"
-                | "rb"
-                | "php"
-                | "cs"
-                | "fs"
-                | "scala"
-                | "clj"
-                | "ex"
-                | "exs"
-                | "erl"
-                | "hs"
-                | "ml"
-                | "lua"
-                | "r"
-                | "jl"
-                | "dart"
-                | "vue"
-                | "svelte"
-                | "astro"
-                | "html"
-                | "htm"
-                | "css"
-                | "scss"
-                | "sass"
-                | "less"
-                | "json"
-                | "yaml"
-                | "yml"
-                | "toml"
-                | "xml"
-                | "md"
-                | "markdown"
-                | "txt"
-                | "rst"
-                | "tex"
-                | "sh"
-                | "bash"
-                | "zsh"
-                | "fish"
-                | "ps1"
-                | "bat"
-                | "cmd"
-                | "sql"
-                | "graphql"
-                | "proto"
-                | ""
+            "" // Allow extensionless files if they are in the special filenames list
         ) || path.file_name().is_some_and(|n| {
             let name = n.to_string_lossy().to_lowercase();
             matches!(
@@ -270,7 +218,7 @@ impl FileWatcher {
             Mode::Server => {
                 let db = Database::new(&self.config.db_path()?)?;
                 let client = Client::new(&self.config.server_host, self.config.server_port);
-                let indexer = ServerIndexer::new(db, client, self.config.max_file_size);
+                let indexer = ServerIndexer::new(db, client, self.config.clone());
                 indexer.index_directory(&self.root_path, false)?;
             }
             Mode::Local => {
@@ -279,7 +227,7 @@ impl FileWatcher {
                 }
                 let db = Database::new(&self.config.db_path()?)?;
                 let engine = crate::core::EmbeddingEngine::new(&self.config)?;
-                let indexer = Indexer::new(db, engine, self.config.max_file_size);
+                let indexer = Indexer::new(db, engine, self.config.clone());
                 indexer.index_directory(&self.root_path, false)?;
             }
         }
