@@ -340,15 +340,55 @@ impl FileWatcher {
                     );
                 }
                 Mode::Local => {
+                    let engine = crate::core::EmbeddingEngine::new(&self.config)?;
+                    self.index_file_local(&db, &engine, path, &content)?;
                     println!(
-                        "  {} {} {} {}",
-                        style("[~]").yellow(),
-                        style("modified").yellow(),
-                        style(filename).cyan(),
-                        style("(pending)").dim()
+                        "  {} {} {}",
+                        style("[+]").green(),
+                        style("indexed").green(),
+                        style(filename).cyan()
                     );
                 }
             }
+        }
+
+        Ok(())
+    }
+
+    fn index_file_local(
+        &self,
+        db: &Database,
+        engine: &crate::core::EmbeddingEngine,
+        path: &Path,
+        content: &str,
+    ) -> Result<()> {
+        use sha2::{Digest, Sha256};
+
+        let mut hasher = Sha256::new();
+        hasher.update(content.as_bytes());
+        let hash = hex::encode(hasher.finalize());
+
+        // Chunk the content
+        let chunks = self.chunk_content(content);
+        if chunks.is_empty() {
+            return Ok(());
+        }
+
+        let file_id = db.insert_file(path, &hash)?;
+
+        // Get embeddings locally
+        let chunk_texts: Vec<&str> = chunks.iter().map(|c| c.content.as_str()).collect();
+        let embeddings = engine.embed_batch(&chunk_texts)?;
+
+        for (idx, (chunk, embedding)) in chunks.iter().zip(embeddings.iter()).enumerate() {
+            db.insert_chunk(
+                file_id,
+                idx as i32,
+                &chunk.content,
+                chunk.start_line,
+                chunk.end_line,
+                embedding,
+            )?;
         }
 
         Ok(())
