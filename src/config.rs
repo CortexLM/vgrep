@@ -262,7 +262,7 @@ impl Config {
         let mut hasher = Sha256::new();
         hasher.update(path.as_bytes());
         let result = hasher.finalize();
-        hex::encode(&result[..8]) // First 8 bytes = 16 hex chars
+        hex::encode(result) // Use full SHA256 hash (32 bytes = 64 hex chars)
     }
 
     /// Get full path to embedding model
