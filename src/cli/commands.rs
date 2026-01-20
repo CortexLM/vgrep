@@ -516,7 +516,7 @@ fn run_index(
             }
 
             let db = Database::new(&config.db_path()?)?;
-            let indexer = ServerIndexer::new(db, client, max_size);
+            let mut indexer = ServerIndexer::new(db, client, max_size);
             indexer.index_directory(&path, force)?;
         }
         Mode::Local => {
@@ -531,7 +531,7 @@ fn run_index(
 
             let db = Database::new(&config.db_path()?)?;
             let engine = EmbeddingEngine::new(config)?;
-            let indexer = Indexer::new(db, engine, max_size);
+            let mut indexer = Indexer::new(db, engine, max_size);
             indexer.index_directory(&path, force)?;
         }
     }

@@ -270,7 +270,7 @@ impl FileWatcher {
             Mode::Server => {
                 let db = Database::new(&self.config.db_path()?)?;
                 let client = Client::new(&self.config.server_host, self.config.server_port);
-                let indexer = ServerIndexer::new(db, client, self.config.max_file_size);
+                let mut indexer = ServerIndexer::new(db, client, self.config.max_file_size);
                 indexer.index_directory(&self.root_path, false)?;
             }
             Mode::Local => {
@@ -279,7 +279,7 @@ impl FileWatcher {
                 }
                 let db = Database::new(&self.config.db_path()?)?;
                 let engine = crate::core::EmbeddingEngine::new(&self.config)?;
-                let indexer = Indexer::new(db, engine, self.config.max_file_size);
+                let mut indexer = Indexer::new(db, engine, self.config.max_file_size);
                 indexer.index_directory(&self.root_path, false)?;
             }
         }
