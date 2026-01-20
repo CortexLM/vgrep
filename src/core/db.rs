@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection};
 use std::path::{Path, PathBuf};
@@ -158,6 +158,10 @@ impl Database {
         path_prefix: &Path,
         limit: usize,
     ) -> Result<Vec<SearchResult>> {
+        if query_embedding.is_empty() {
+            bail!("Query embedding is empty; cannot compute similarity.");
+        }
+
         let path_prefix_str = path_prefix.to_string_lossy();
         let like_pattern = format!("{}%", path_prefix_str);
 
@@ -168,24 +172,41 @@ impl Database {
               WHERE f.path LIKE ?",
         )?;
 
-        let mut results: Vec<SearchResult> = stmt
-            .query_map([&like_pattern], |row| {
-                let embedding_blob: Vec<u8> = row.get(6)?;
-                let embedding = bytes_to_embedding(&embedding_blob);
-                let similarity = cosine_similarity(query_embedding, &embedding);
+        let mut rows = stmt.query([&like_pattern])?;
+        let mut results: Vec<SearchResult> = Vec::new();
 
-                Ok(SearchResult {
-                    chunk_id: row.get(0)?,
-                    file_id: row.get(1)?,
-                    path: PathBuf::from(row.get::<_, String>(2)?),
-                    content: row.get(3)?,
-                    start_line: row.get(4)?,
-                    end_line: row.get(5)?,
-                    similarity,
-                })
-            })?
-            .filter_map(Result::ok)
-            .collect();
+        while let Some(row) = rows.next()? {
+            let embedding_blob: Vec<u8> = row.get(6)?;
+            if embedding_blob.len() % 4 != 0 {
+                bail!(
+                    "Corrupt embedding data (blob length {} is not a multiple of 4). Reindex with `vgrep index --force`.",
+                    embedding_blob.len()
+                );
+            }
+
+            let embedding = bytes_to_embedding(&embedding_blob);
+            if query_embedding.len() != embedding.len() {
+                let path_str: String = row.get(2)?;
+                bail!(
+                    "Embedding dimension mismatch: query embedding has {} dimensions but indexed embedding has {} dimensions (example file: {}). This usually means the embedding model changed since indexing. Reindex with `vgrep index --force`.",
+                    query_embedding.len(),
+                    embedding.len(),
+                    path_str
+                );
+            }
+
+            let similarity = cosine_similarity(query_embedding, &embedding);
+
+            results.push(SearchResult {
+                chunk_id: row.get(0)?,
+                file_id: row.get(1)?,
+                path: PathBuf::from(row.get::<_, String>(2)?),
+                content: row.get(3)?,
+                start_line: row.get(4)?,
+                end_line: row.get(5)?,
+                similarity,
+            });
+        }
 
         // Sort by similarity (highest first)
         results.sort_by(|a, b| {
@@ -284,9 +305,12 @@ fn bytes_to_embedding(bytes: &[u8]) -> Vec<f32> {
 }
 
 fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
-    if a.len() != b.len() || a.is_empty() {
-        return 0.0;
-    }
+    debug_assert_eq!(
+        a.len(),
+        b.len(),
+        "cosine_similarity expects equal dimensions"
+    );
+    debug_assert!(!a.is_empty(), "cosine_similarity expects non-empty vectors");
 
     let (dot, norm_a, norm_b) = a.iter().zip(b.iter()).fold(
         (0.0f64, 0.0f64, 0.0f64),
@@ -302,4 +326,30 @@ fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     }
 
     (dot / (norm_a.sqrt() * norm_b.sqrt())) as f32
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn search_similar_errors_on_embedding_dimension_mismatch() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("vgrep.db");
+        let db = Database::new(&db_path).unwrap();
+
+        let file_path = dir.path().join("file.rs");
+        let file_id = db.insert_file(&file_path, "hash").unwrap();
+        db.insert_chunk(file_id, 0, "content", 1, 1, &[0.1, 0.2, 0.3])
+            .unwrap();
+
+        let err = db
+            .search_similar(&[0.9, 0.8], dir.path(), 10)
+            .expect_err("expected dimension mismatch error");
+
+        let msg = err.to_string();
+        assert!(msg.contains("Embedding dimension mismatch"), "{msg}");
+        assert!(msg.contains("vgrep index --force"), "{msg}");
+    }
 }
