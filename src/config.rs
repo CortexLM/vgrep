@@ -364,11 +364,20 @@ impl Config {
     }
 
     pub fn set_chunk_size(&mut self, size: usize) -> Result<()> {
+        if size == 0 {
+            anyhow::bail!("Chunk size must be greater than 0");
+        }
+        if size <= self.chunk_overlap {
+            anyhow::bail!("Chunk size must be greater than chunk overlap ({})", self.chunk_overlap);
+        }
         self.chunk_size = size;
         self.save()
     }
 
     pub fn set_chunk_overlap(&mut self, overlap: usize) -> Result<()> {
+        if overlap >= self.chunk_size {
+            anyhow::bail!("Chunk overlap must be less than chunk size ({})", self.chunk_size);
+        }
         self.chunk_overlap = overlap;
         self.save()
     }
