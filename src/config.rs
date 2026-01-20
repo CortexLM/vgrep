@@ -99,6 +99,10 @@ pub struct Config {
     /// Context size for embeddings
     #[serde(default = "default_context_size")]
     pub context_size: usize,
+
+    /// List of file extensions to index
+    #[serde(default = "default_extensions")]
+    pub extensions: Vec<String>,
 }
 
 fn default_server_host() -> String {
@@ -159,6 +163,22 @@ fn default_context_size() -> usize {
     512
 }
 
+fn default_extensions() -> Vec<String> {
+    vec![
+        "rs".into(), "py".into(), "js".into(), "ts".into(), "tsx".into(), "jsx".into(),
+        "go".into(), "c".into(), "cpp".into(), "h".into(), "hpp".into(), "java".into(),
+        "kt".into(), "swift".into(), "rb".into(), "php".into(), "cs".into(), "fs".into(),
+        "scala".into(), "clj".into(), "ex".into(), "exs".into(), "erl".into(), "hs".into(),
+        "ml".into(), "lua".into(), "r".into(), "jl".into(), "dart".into(), "vue".into(),
+        "svelte".into(), "astro".into(), "html".into(), "htm".into(), "css".into(),
+        "scss".into(), "sass".into(), "less".into(), "json".into(), "yaml".into(),
+        "yml".into(), "toml".into(), "xml".into(), "md".into(), "markdown".into(),
+        "txt".into(), "rst".into(), "tex".into(), "sh".into(), "bash".into(),
+        "zsh".into(), "fish".into(), "ps1".into(), "bat".into(), "cmd".into(),
+        "sql".into(), "graphql".into(), "proto".into(),
+    ]
+}
+
 fn default_use_reranker() -> bool {
     true
 }
@@ -182,6 +202,7 @@ impl Default for Config {
             watch_debounce_ms: default_watch_debounce_ms(),
             n_threads: 0,
             context_size: default_context_size(),
+            extensions: default_extensions(),
         }
     }
 }
