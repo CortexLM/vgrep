@@ -47,6 +47,7 @@ pub struct DatabaseStats {
 impl Database {
     pub fn new(path: &Path) -> Result<Self> {
         let conn = Connection::open(path)?;
+        conn.pragma_update(None, "foreign_keys", "ON")?;
         let db = Self { conn };
         db.init_schema()?;
         Ok(db)
