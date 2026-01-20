@@ -274,6 +274,11 @@ fn embedding_to_bytes(embedding: &[f32]) -> Vec<u8> {
 }
 
 fn bytes_to_embedding(bytes: &[u8]) -> Vec<f32> {
+    debug_assert!(
+        bytes.len() % 4 == 0,
+        "embedding bytes length {} is not divisible by 4, possible data corruption",
+        bytes.len()
+    );
     bytes
         .chunks_exact(4)
         .map(|chunk| {
@@ -302,4 +307,25 @@ fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     }
 
     (dot / (norm_a.sqrt() * norm_b.sqrt())) as f32
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[should_panic(expected = "embedding bytes length 5 is not divisible by 4")]
+    fn test_bytes_to_embedding_truncation() {
+        // 5 bytes: 4 bytes for one f32, 1 byte extra
+        let bytes: Vec<u8> = vec![0, 0, 128, 63, 0]; // 1.0f32 and one extra byte
+        let _ = bytes_to_embedding(&bytes);
+    }
+
+    #[test]
+    fn test_bytes_to_embedding_valid() {
+        let original = vec![1.0, 2.0, 3.0];
+        let bytes = embedding_to_bytes(&original);
+        let recovered = bytes_to_embedding(&bytes);
+        assert_eq!(recovered, original);
+    }
 }
