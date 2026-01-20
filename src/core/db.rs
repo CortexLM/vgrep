@@ -47,6 +47,16 @@ pub struct DatabaseStats {
 impl Database {
     pub fn new(path: &Path) -> Result<Self> {
         let conn = Connection::open(path)?;
+        
+        // Enable WAL mode for better concurrency and write performance
+        conn.pragma_update(None, "journal_mode", "WAL")?;
+        
+        // Set a busy timeout to handle lock contention gracefully (5 seconds)
+        conn.busy_timeout(std::time::Duration::from_secs(5))?;
+        
+        // Set synchronous mode to NORMAL for better performance while maintaining safety in WAL mode
+        conn.pragma_update(None, "synchronous", "NORMAL")?;
+        
         let db = Self { conn };
         db.init_schema()?;
         Ok(db)
