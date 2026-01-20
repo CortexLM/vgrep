@@ -17,6 +17,7 @@ pub mod config;
 pub mod core;
 pub mod server;
 pub mod ui;
+pub mod utils;
 pub mod watcher;
 
 pub use config::Config;

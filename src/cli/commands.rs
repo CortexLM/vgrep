@@ -8,6 +8,7 @@ use crate::config::{Config, Mode};
 use crate::core::{Database, EmbeddingEngine, Indexer, SearchEngine, ServerIndexer};
 use crate::server::{self, Client};
 use crate::ui::{self, SearchTui};
+use crate::utils::validation;
 use crate::watcher::FileWatcher;
 
 #[derive(Parser)]
@@ -867,9 +868,21 @@ fn run_models(action: ModelsAction, config: &mut Config) -> Result<()> {
                     .get("Qwen3-Embedding-0.6B-Q8_0.gguf")?;
 
                 pb.finish_and_clear();
-                ui::print_success(&format!("Downloaded: {}", embedding_path.display()));
-
-                config.set_embedding_model(embedding_path.to_string_lossy().to_string())?;
+                
+                // Validate the downloaded file
+                println!("    Validating embedding model...");
+                match validation::validate_model_file(&embedding_path, 100 * 1024 * 1024) {
+                    Ok(_) => {
+                        ui::print_success(&format!("Downloaded: {}", embedding_path.display()));
+                        config.set_embedding_model(embedding_path.to_string_lossy().to_string())?;
+                    },
+                    Err(e) => {
+                        ui::print_error(&format!("Validation failed: {}", e));
+                        println!("    Deleting corrupted file...");
+                        let _ = std::fs::remove_file(&embedding_path);
+                        return Err(e);
+                    }
+                }
             }
 
             if !embedding_only {
@@ -894,9 +907,21 @@ fn run_models(action: ModelsAction, config: &mut Config) -> Result<()> {
                     .get("Qwen3-Reranker-0.6B-Q4_K_M.gguf")?;
 
                 pb.finish_and_clear();
-                ui::print_success(&format!("Downloaded: {}", reranker_path.display()));
-
-                config.set_reranker_model(reranker_path.to_string_lossy().to_string())?;
+                
+                // Validate the downloaded file
+                println!("    Validating reranker model...");
+                match validation::validate_model_file(&reranker_path, 100 * 1024 * 1024) {
+                    Ok(_) => {
+                        ui::print_success(&format!("Downloaded: {}", reranker_path.display()));
+                        config.set_reranker_model(reranker_path.to_string_lossy().to_string())?;
+                    },
+                    Err(e) => {
+                        ui::print_error(&format!("Validation failed: {}", e));
+                        println!("    Deleting corrupted file...");
+                        let _ = std::fs::remove_file(&reranker_path);
+                        return Err(e);
+                    }
+                }
             }
 
             println!();
