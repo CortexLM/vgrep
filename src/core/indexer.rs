@@ -6,7 +6,7 @@ use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use super::db::Database;
+use super::db::{ChunkEntry, Database};
 use super::embeddings::EmbeddingEngine;
 use crate::ui;
 
@@ -42,7 +42,7 @@ impl Indexer {
         }
     }
 
-    pub fn index_directory(&self, path: &Path, force: bool) -> Result<()> {
+    pub fn index_directory(&mut self, path: &Path, force: bool) -> Result<()> {
         let abs_path = fs::canonicalize(path).context("Failed to resolve path")?;
 
         println!(
@@ -159,22 +159,24 @@ impl Indexer {
         let mut indexed = 0;
 
         for pending in &pending_files {
-            // Insert file
-            let file_id = self.db.insert_file(&pending.path, &pending.hash)?;
-
-            // Insert chunks with their embeddings
+            // Prepare chunks with embeddings
+            let mut chunks_to_insert = Vec::new();
             for (chunk_idx, chunk) in pending.chunks.iter().enumerate() {
                 let embedding = &all_embeddings[embedding_idx];
-                self.db.insert_chunk(
-                    file_id,
-                    chunk_idx as i32,
-                    &chunk.content,
-                    chunk.start_line,
-                    chunk.end_line,
-                    embedding,
-                )?;
+                chunks_to_insert.push(ChunkEntry {
+                    id: 0, // Will be auto-incremented
+                    file_id: 0, // Will be set after file insertion
+                    chunk_index: chunk_idx as i32,
+                    content: chunk.content.clone(),
+                    start_line: chunk.start_line,
+                    end_line: chunk.end_line,
+                    embedding: embedding.clone(),
+                });
                 embedding_idx += 1;
             }
+
+            // Insert file and chunks atomically
+            self.db.insert_file_with_chunks(&pending.path, &pending.hash, &chunks_to_insert)?;
 
             indexed += 1;
             pb.inc(1);
@@ -410,7 +412,7 @@ impl ServerIndexer {
         }
     }
 
-    pub fn index_directory(&self, path: &Path, force: bool) -> Result<()> {
+    pub fn index_directory(&mut self, path: &Path, force: bool) -> Result<()> {
         let abs_path = fs::canonicalize(path).context("Failed to resolve path")?;
 
         println!(
@@ -538,20 +540,23 @@ impl ServerIndexer {
         let mut indexed = 0;
 
         for pending in &pending_files {
-            let file_id = self.db.insert_file(&pending.path, &pending.hash)?;
+            let mut chunks_to_insert = Vec::new();
 
             for (chunk_idx, chunk) in pending.chunks.iter().enumerate() {
                 let embedding = &all_embeddings[embedding_idx];
-                self.db.insert_chunk(
-                    file_id,
-                    chunk_idx as i32,
-                    &chunk.content,
-                    chunk.start_line,
-                    chunk.end_line,
-                    embedding,
-                )?;
+                chunks_to_insert.push(ChunkEntry {
+                    id: 0,
+                    file_id: 0,
+                    chunk_index: chunk_idx as i32,
+                    content: chunk.content.clone(),
+                    start_line: chunk.start_line,
+                    end_line: chunk.end_line,
+                    embedding: embedding.clone(),
+                });
                 embedding_idx += 1;
             }
+
+            self.db.insert_file_with_chunks(&pending.path, &pending.hash, &chunks_to_insert)?;
 
             indexed += 1;
             pb.inc(1);

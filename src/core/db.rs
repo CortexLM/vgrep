@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection};
 use std::path::{Path, PathBuf};
@@ -102,6 +102,50 @@ impl Database {
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
             Err(e) => Err(e.into()),
         }
+    }
+
+    pub fn insert_file_with_chunks(
+        &mut self,
+        path: &Path,
+        hash: &str,
+        chunks: &[ChunkEntry],
+    ) -> Result<()> {
+        let path_str = path.to_string_lossy();
+        let now = Utc::now().to_rfc3339();
+
+        let tx = self.conn.transaction()?;
+
+        // Insert file
+        tx.execute(
+            "INSERT OR REPLACE INTO files (path, hash, indexed_at) VALUES (?, ?, ?)",
+            params![path_str.as_ref(), hash, now],
+        )?;
+
+        let file_id = tx.last_insert_rowid();
+
+        // Insert chunks
+        {
+            let mut stmt = tx.prepare(
+                r"INSERT OR REPLACE INTO chunks 
+                  (file_id, chunk_index, content, start_line, end_line, embedding) 
+                  VALUES (?, ?, ?, ?, ?, ?)",
+            )?;
+
+            for chunk in chunks {
+                let embedding_bytes = embedding_to_bytes(&chunk.embedding);
+                stmt.execute(params![
+                    file_id,
+                    chunk.chunk_index,
+                    chunk.content,
+                    chunk.start_line,
+                    chunk.end_line,
+                    embedding_bytes
+                ])?;
+            }
+        }
+
+        tx.commit()?;
+        Ok(())
     }
 
     pub fn insert_file(&self, path: &Path, hash: &str) -> Result<i64> {
