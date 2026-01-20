@@ -159,7 +159,14 @@ impl Database {
         limit: usize,
     ) -> Result<Vec<SearchResult>> {
         let path_prefix_str = path_prefix.to_string_lossy();
-        let like_pattern = format!("{}%", path_prefix_str);
+        
+        // Ensure the prefix ends with a directory separator to avoid partial directory matching
+        // e.g. "/home/user/proj" should become "/home/user/proj/" to avoid matching "/home/user/project"
+        let like_pattern = if path_prefix_str.ends_with(std::path::MAIN_SEPARATOR) {
+            format!("{}%", path_prefix_str)
+        } else {
+            format!("{}{}%", path_prefix_str, std::path::MAIN_SEPARATOR)
+        };
 
         let mut stmt = self.conn.prepare(
             r"SELECT c.id, c.file_id, f.path, c.content, c.start_line, c.end_line, c.embedding
@@ -302,4 +309,49 @@ fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     }
 
     (dot / (norm_a.sqrt() * norm_b.sqrt())) as f32
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_path_prefix_search_bug_reproduction() -> Result<()> {
+        let dir = tempdir()?;
+        let db_path = dir.path().join("test.db");
+        let db = Database::new(&db_path)?;
+
+        // Setup paths
+        let base_path = PathBuf::from("/home/user");
+        let path1 = base_path.join("proj/file1.txt");
+        let path2 = base_path.join("project/file2.txt");
+
+        // Insert files
+        let id1 = db.insert_file(&path1, "hash1")?;
+        let id2 = db.insert_file(&path2, "hash2")?;
+
+        // Insert dummy chunks
+        let embedding = vec![0.1; 128];
+        db.insert_chunk(id1, 0, "content1", 1, 1, &embedding)?;
+        db.insert_chunk(id2, 0, "content2", 1, 1, &embedding)?;
+
+        // Search with prefix "/home/user/proj"
+        // This should match ONLY "/home/user/proj/file1.txt"
+        // But due to the bug, it likely matches "/home/user/project/file2.txt" as well
+        let prefix = base_path.join("proj");
+        let results = db.search_similar(&embedding, &prefix, 10)?;
+
+        let found_paths: Vec<String> = results.iter()
+            .map(|r| r.path.to_string_lossy().to_string())
+            .collect();
+            
+        println!("Found paths: {:?}", found_paths);
+        
+        // Assert that we DO NOT match "project" when searching for "proj"
+        let matched_project = found_paths.iter().any(|p| p.contains("project"));
+        assert!(!matched_project, "Should not match sibling directory 'project' when searching for 'proj'");
+        
+        Ok(())
+    }
 }
