@@ -315,6 +315,20 @@ impl FileWatcher {
             // File was created or modified
             let content = match std::fs::read_to_string(path) {
                 Ok(c) => c,
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                    // File was deleted between check and read (TOCTOU)
+                    if let Some(entry) = db.get_file_by_path(path)? {
+                        db.delete_file(entry.id)?;
+                        println!(
+                            "  {} {} {} {}",
+                            style("[-]").red(),
+                            style("removed").red(),
+                            style(filename).dim(),
+                            style("(race condition handled)").dim()
+                        );
+                    }
+                    continue;
+                }
                 Err(_) => continue, // Skip binary or unreadable files
             };
 
