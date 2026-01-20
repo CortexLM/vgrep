@@ -168,99 +168,7 @@ impl FileWatcher {
             }
         }
 
-        // Check file size
-        if let Ok(metadata) = std::fs::metadata(path) {
-            if metadata.len() > self.config.max_file_size {
-                return false;
-            }
-        }
-
-        // Check extension
-        let ext = path
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("")
-            .to_lowercase();
-
-        matches!(
-            ext.as_str(),
-            "rs" | "py"
-                | "js"
-                | "ts"
-                | "tsx"
-                | "jsx"
-                | "go"
-                | "c"
-                | "cpp"
-                | "h"
-                | "hpp"
-                | "java"
-                | "kt"
-                | "swift"
-                | "rb"
-                | "php"
-                | "cs"
-                | "fs"
-                | "scala"
-                | "clj"
-                | "ex"
-                | "exs"
-                | "erl"
-                | "hs"
-                | "ml"
-                | "lua"
-                | "r"
-                | "jl"
-                | "dart"
-                | "vue"
-                | "svelte"
-                | "astro"
-                | "html"
-                | "htm"
-                | "css"
-                | "scss"
-                | "sass"
-                | "less"
-                | "json"
-                | "yaml"
-                | "yml"
-                | "toml"
-                | "xml"
-                | "md"
-                | "markdown"
-                | "txt"
-                | "rst"
-                | "tex"
-                | "sh"
-                | "bash"
-                | "zsh"
-                | "fish"
-                | "ps1"
-                | "bat"
-                | "cmd"
-                | "sql"
-                | "graphql"
-                | "proto"
-                | ""
-        ) || path.file_name().is_some_and(|n| {
-            let name = n.to_string_lossy().to_lowercase();
-            matches!(
-                name.as_str(),
-                "dockerfile"
-                    | "makefile"
-                    | "cmakelists.txt"
-                    | "rakefile"
-                    | "gemfile"
-                    | "podfile"
-                    | "vagrantfile"
-                    | ".gitignore"
-                    | ".dockerignore"
-                    | ".env.example"
-                    | "readme"
-                    | "license"
-                    | "changelog"
-            )
-        })
+        crate::core::index_filter::should_index_path(path, self.config.max_file_size)
     }
 
     fn index_all(&self) -> Result<()> {
@@ -452,4 +360,21 @@ struct FileChunk {
     content: String,
     start_line: i32,
     end_line: i32,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn should_not_index_extensionless_files() {
+        let watcher = FileWatcher::new(Config::default(), PathBuf::from("."));
+        assert!(!watcher.should_index(Path::new("my_binary")));
+    }
+
+    #[test]
+    fn should_index_known_extensionless_filenames() {
+        let watcher = FileWatcher::new(Config::default(), PathBuf::from("."));
+        assert!(watcher.should_index(Path::new("Makefile")));
+    }
 }

@@ -2,6 +2,7 @@
 
 mod db;
 mod embeddings;
+pub(crate) mod index_filter;
 mod indexer;
 mod search;
 
