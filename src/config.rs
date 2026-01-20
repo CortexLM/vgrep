@@ -224,7 +224,7 @@ impl Config {
         std::fs::create_dir_all(&config_dir)?;
         let config_path = config_dir.join(CONFIG_FILE);
         let content = serde_json::to_string_pretty(self)?;
-        std::fs::write(&config_path, content)?;
+        crate::utils::write_atomic(&config_path, content)?;
         Ok(())
     }
 
