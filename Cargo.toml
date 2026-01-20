@@ -17,7 +17,7 @@ name = "vgrep"
 path = "src/main.rs"
 
 [dependencies]
-llama-cpp-2 = { git = "https://github.com/utilityai/llama-cpp-rs", branch = "main" }
+llama-cpp-2 = { git = "https://github.com/utilityai/llama-cpp-rs", branch = "main", default-features = false }
 hf-hub = "0.4"
 clap = { version = "4.5", features = ["derive", "env"] }
 tokio = { version = "1", features = ["full"] }
@@ -52,9 +52,8 @@ predicates = "3"
 
 [features]
 default = []
-cuda = ["llama-cpp-2/cuda"]
-metal = ["llama-cpp-2/metal"]
-vulkan = ["llama-cpp-2/vulkan"]
+
+
 
 [profile.release]
 lto = true
