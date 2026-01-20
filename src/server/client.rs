@@ -1,8 +1,13 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader, Read, Write};
-use std::net::TcpStream;
+use std::net::{TcpStream, ToSocketAddrs};
 use std::path::Path;
+use std::time::Duration;
+
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+const READ_TIMEOUT: Duration = Duration::from_secs(60);
+const WRITE_TIMEOUT: Duration = Duration::from_secs(60);
 
 #[derive(Debug, Serialize)]
 struct SearchRequest {
@@ -67,8 +72,16 @@ impl Client {
 
         // Simple HTTP POST using TCP (avoiding extra dependencies)
         let host_port = self.base_url.trim_start_matches("http://");
-        let mut stream = TcpStream::connect(host_port)
+        let addr = host_port
+            .to_socket_addrs()?
+            .next()
+            .context("Failed to resolve server address")?;
+
+        let mut stream = TcpStream::connect_timeout(&addr, CONNECT_TIMEOUT)
             .context("Failed to connect to vgrep server. Is it running? Start with: vgrep serve")?;
+
+        stream.set_read_timeout(Some(READ_TIMEOUT))?;
+        stream.set_write_timeout(Some(WRITE_TIMEOUT))?;
 
         let request = format!(
             "POST /search HTTP/1.1\r\n\
@@ -115,8 +128,16 @@ impl Client {
         let body = serde_json::to_string(&request)?;
         let host_port = self.base_url.trim_start_matches("http://");
 
-        let mut stream = TcpStream::connect(host_port)
+        let addr = host_port
+            .to_socket_addrs()?
+            .next()
+            .context("Failed to resolve server address")?;
+
+        let mut stream = TcpStream::connect_timeout(&addr, CONNECT_TIMEOUT)
             .context("Failed to connect to vgrep server. Is it running? Start with: vgrep serve")?;
+
+        stream.set_read_timeout(Some(READ_TIMEOUT))?;
+        stream.set_write_timeout(Some(WRITE_TIMEOUT))?;
 
         let http_request = format!(
             "POST /embed_batch HTTP/1.1\r\n\
@@ -158,8 +179,16 @@ impl Client {
     pub fn health(&self) -> Result<bool> {
         let host_port = self.base_url.trim_start_matches("http://");
 
-        match TcpStream::connect(host_port) {
+        let addr = match host_port.to_socket_addrs()?.next() {
+            Some(addr) => addr,
+            None => return Ok(false),
+        };
+
+        match TcpStream::connect_timeout(&addr, CONNECT_TIMEOUT) {
             Ok(mut stream) => {
+                let _ = stream.set_read_timeout(Some(READ_TIMEOUT));
+                let _ = stream.set_write_timeout(Some(WRITE_TIMEOUT));
+
                 let request = format!(
                     "GET /health HTTP/1.1\r\n\
                      Host: {}\r\n\
