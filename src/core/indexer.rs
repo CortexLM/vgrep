@@ -351,11 +351,30 @@ impl Indexer {
                     end_line: (line_idx - 1) as i32,
                 });
 
-                let overlap_start = if line_idx > 0 {
-                    line_idx.saturating_sub(self.chunk_overlap / 40)
-                } else {
-                    0
-                };
+                // Calculate overlap based on characters, not arbitrary "magic number 40" division.
+                // We want to keep enough lines from the end of the current chunk to meet the overlap requirement.
+                let mut overlap_char_count = 0;
+                let mut overlap_lines_count = 0;
+                let mut overlap_start = line_idx;
+
+                // Walk backwards from current line to find where overlap should start
+                // Ensure we don't go back past the start of the current chunk to avoid infinite loops or weirdness,
+                // although logic suggests we just want *some* overlap from the immediately preceding content.
+                // Actually, we can go back as far as needed within the lines we have processed.
+                for i in (0..line_idx).rev() {
+                    let line_len = lines[i].len() + 1; // +1 for newline
+                    if overlap_char_count + line_len > self.chunk_overlap {
+                        break;
+                    }
+                    overlap_char_count += line_len;
+                    overlap_lines_count += 1;
+                    overlap_start = i;
+                }
+                
+                // If we couldn't find any lines (e.g. one huge line), just overlap the last line if possible
+                if overlap_lines_count == 0 && line_idx > 0 {
+                    overlap_start = line_idx - 1;
+                }
 
                 current_chunk = lines[overlap_start..line_idx].join("\n");
                 if !current_chunk.is_empty() {
@@ -727,11 +746,30 @@ impl ServerIndexer {
                     end_line: (line_idx - 1) as i32,
                 });
 
-                let overlap_start = if line_idx > 0 {
-                    line_idx.saturating_sub(self.chunk_overlap / 40)
-                } else {
-                    0
-                };
+                // Calculate overlap based on characters, not arbitrary "magic number 40" division.
+                // We want to keep enough lines from the end of the current chunk to meet the overlap requirement.
+                let mut overlap_char_count = 0;
+                let mut overlap_lines_count = 0;
+                let mut overlap_start = line_idx;
+
+                // Walk backwards from current line to find where overlap should start
+                // Ensure we don't go back past the start of the current chunk to avoid infinite loops or weirdness,
+                // although logic suggests we just want *some* overlap from the immediately preceding content.
+                // Actually, we can go back as far as needed within the lines we have processed.
+                for i in (0..line_idx).rev() {
+                    let line_len = lines[i].len() + 1; // +1 for newline
+                    if overlap_char_count + line_len > self.chunk_overlap {
+                        break;
+                    }
+                    overlap_char_count += line_len;
+                    overlap_lines_count += 1;
+                    overlap_start = i;
+                }
+                
+                // If we couldn't find any lines (e.g. one huge line), just overlap the last line if possible
+                if overlap_lines_count == 0 && line_idx > 0 {
+                    overlap_start = line_idx - 1;
+                }
 
                 current_chunk = lines[overlap_start..line_idx].join("\n");
                 if !current_chunk.is_empty() {
