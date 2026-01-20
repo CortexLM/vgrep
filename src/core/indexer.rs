@@ -5,6 +5,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::{Path, PathBuf};
+use tracing::{info, warn};
 
 use super::db::Database;
 use super::embeddings::EmbeddingEngine;
@@ -45,6 +46,7 @@ impl Indexer {
     pub fn index_directory(&self, path: &Path, force: bool) -> Result<()> {
         let abs_path = fs::canonicalize(path).context("Failed to resolve path")?;
 
+        info!("Scanning directory: {}", abs_path.display());
         println!(
             "  {}Scanning: {}",
             ui::FOLDER,
@@ -64,14 +66,17 @@ impl Indexer {
             .collect();
 
         if files.is_empty() {
+            warn!("No files to index in {}", abs_path.display());
             println!("  {}No files to index.", ui::WARN);
             return Ok(());
         }
 
+        info!("Found {} files to index", files.len());
         println!("  {}Found {} files", ui::FILE, style(files.len()).cyan());
         println!();
 
         // Phase 1: Collect all chunks from all files
+        info!("Phase 1: Reading files");
         println!("  {}Phase 1: Reading files...", style("→").dim());
 
         let pb = ProgressBar::new(files.len() as u64);
@@ -108,6 +113,7 @@ impl Indexer {
         }
 
         pb.finish_and_clear();
+        info!("Read {} files, {} chunks", pending_files.len(), total_chunks);
         println!(
             "    {}Read {} files, {} chunks",
             ui::CHECK,
@@ -117,11 +123,13 @@ impl Indexer {
 
         if pending_files.is_empty() {
             println!();
+            info!("All files up to date ({} skipped)", skipped);
             println!("  {}All files up to date ({} skipped)", ui::CHECK, skipped);
             return Ok(());
         }
 
         // Phase 2: Generate embeddings for all chunks at once
+        info!("Phase 2: Generating embeddings");
         println!("  {}Phase 2: Generating embeddings...", style("→").dim());
 
         let all_chunks: Vec<&str> = pending_files
@@ -139,6 +147,7 @@ impl Indexer {
         let all_embeddings = self.engine.embed_batch(&all_chunks)?;
 
         pb.finish_and_clear();
+        info!("Generated {} embeddings", all_embeddings.len());
         println!(
             "    {}Generated {} embeddings",
             ui::CHECK,
@@ -146,6 +155,7 @@ impl Indexer {
         );
 
         // Phase 3: Store in database
+        info!("Phase 3: Storing in database");
         println!("  {}Phase 3: Storing in database...", style("→").dim());
 
         let pb = ProgressBar::new(pending_files.len() as u64);
@@ -181,9 +191,11 @@ impl Indexer {
         }
 
         pb.finish_and_clear();
+        info!("Stored {} files", indexed);
         println!("    {}Stored {} files", ui::CHECK, indexed);
 
         println!();
+        info!("Indexing complete. Files: {}, Skipped: {}, Chunks: {}", indexed, skipped, total_chunks);
         println!("  {}Indexing complete!", ui::SPARKLES);
         println!(
             "    {} {} indexed, {} skipped",
@@ -558,9 +570,11 @@ impl ServerIndexer {
         }
 
         pb.finish_and_clear();
+        info!("Stored {} files", indexed);
         println!("    {}Stored {} files", ui::CHECK, indexed);
 
         println!();
+        info!("Indexing complete. Files: {}, Skipped: {}, Chunks: {}", indexed, skipped, total_chunks);
         println!("  {}Indexing complete!", ui::SPARKLES);
         println!(
             "    {} {} indexed, {} skipped",

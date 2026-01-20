@@ -9,6 +9,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+use tracing::{info, warn};
 
 use crate::config::Config;
 use crate::core::{Database, Indexer, ServerIndexer};
@@ -65,6 +66,7 @@ impl FileWatcher {
         .expect("Error setting Ctrl+C handler");
 
         // Initial index
+        info!("Starting initial indexing");
         println!("  {} Initial indexing...", style(">>").dim());
         self.index_all()?;
 
@@ -85,6 +87,7 @@ impl FileWatcher {
 
         watcher.watch(&abs_path, RecursiveMode::Recursive)?;
 
+        info!("Watching for changes in {}", abs_path.display());
         println!("  {} Watching for changes...", style("[~]").cyan());
         println!();
 
@@ -125,6 +128,7 @@ impl FileWatcher {
             }
         }
 
+        info!("Watcher stopped");
         println!();
         println!("  {} Watcher stopped", style("[x]").yellow());
         println!();
@@ -302,6 +306,7 @@ impl FileWatcher {
                 // File was deleted
                 if let Some(entry) = db.get_file_by_path(path)? {
                     db.delete_file(entry.id)?;
+                    info!("File removed: {}", filename);
                     println!(
                         "  {} {} {}",
                         style("[-]").red(),
@@ -332,6 +337,7 @@ impl FileWatcher {
                 Mode::Server => {
                     let client = Client::new(&self.config.server_host, self.config.server_port);
                     self.index_file_server(&db, &client, path, &content)?;
+                    info!("File indexed: {}", filename);
                     println!(
                         "  {} {} {}",
                         style("[+]").green(),
@@ -340,6 +346,7 @@ impl FileWatcher {
                     );
                 }
                 Mode::Local => {
+                    info!("File modified (pending): {}", filename);
                     println!(
                         "  {} {} {} {}",
                         style("[~]").yellow(),

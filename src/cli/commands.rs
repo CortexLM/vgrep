@@ -40,6 +40,14 @@ pub struct Cli {
     /// Server port to use
     #[arg(short = 'p', long, global = true, env = "VGREP_PORT")]
     port: Option<u16>,
+
+    /// Log level (error, warn, info, debug, trace)
+    #[arg(long, global = true, env = "VGREP_LOG_LEVEL")]
+    log_level: Option<String>,
+
+    /// Log file path
+    #[arg(long, global = true, env = "VGREP_LOG_FILE")]
+    log_file: Option<PathBuf>,
 }
 
 #[derive(Subcommand)]
@@ -242,6 +250,8 @@ enum ConfigKey {
 
 impl Cli {
     pub fn run(self) -> Result<()> {
+        crate::logging::init_logging(self.log_level.clone(), self.log_file.clone());
+
         let mut config = Config::load()?;
 
         // Apply global overrides
