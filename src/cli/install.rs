@@ -1,3 +1,4 @@
+use crate::utils::write_atomic;
 use anyhow::{Context, Result};
 use console::style;
 use std::fs;
@@ -61,7 +62,7 @@ pub fn install_claude_code() -> Result<()> {
     if !content.contains("vgrep") {
         content.push_str("\n\n");
         content.push_str(VGREP_SKILL.trim());
-        fs::write(&instructions_path, content)?;
+        write_atomic(&instructions_path, content)?;
         println!(
             "  {} Added vgrep skill to Claude Code",
             style("[+]").green()
@@ -101,7 +102,7 @@ pub fn uninstall_claude_code() -> Result<()> {
         let updated = content
             .replace(VGREP_SKILL.trim(), "")
             .replace("\n\n\n", "\n\n");
-        fs::write(&instructions_path, updated.trim())?;
+        write_atomic(&instructions_path, updated.trim())?;
         println!("  {} Removed vgrep from Claude Code", style("[-]").green());
     } else {
         println!(
@@ -144,7 +145,7 @@ Usage:
 })"#;
 
     let tool_path = tool_dir.join("vgrep.ts");
-    fs::write(&tool_path, tool_content.trim())?;
+    write_atomic(&tool_path, tool_content.trim())?;
     println!("  {} Created vgrep tool", style("[+]").green());
 
     // Update opencode.json
@@ -169,7 +170,7 @@ Usage:
         "enabled": true
     });
 
-    fs::write(&config_path, serde_json::to_string_pretty(&config)?)?;
+    write_atomic(&config_path, serde_json::to_string_pretty(&config)?)?;
     println!("  {} Updated OpenCode config", style("[+]").green());
 
     println!();
@@ -204,7 +205,7 @@ pub fn uninstall_opencode() -> Result<()> {
                     obj.remove("vgrep");
                 }
             }
-            fs::write(&config_path, serde_json::to_string_pretty(&config)?)?;
+            write_atomic(&config_path, serde_json::to_string_pretty(&config)?)?;
             println!("  {} Updated OpenCode config", style("[-]").green());
         }
     }
@@ -228,7 +229,7 @@ pub fn install_codex() -> Result<()> {
     if !content.contains("vgrep") {
         content.push_str("\n\n");
         content.push_str(VGREP_SKILL.trim());
-        fs::write(&agents_path, content)?;
+        write_atomic(&agents_path, content)?;
         println!("  {} Added vgrep skill to Codex", style("[+]").green());
     } else {
         println!(
@@ -257,7 +258,7 @@ pub fn uninstall_codex() -> Result<()> {
         if updated.trim().is_empty() {
             fs::remove_file(&agents_path)?;
         } else {
-            fs::write(&agents_path, updated.trim())?;
+            write_atomic(&agents_path, updated.trim())?;
         }
         println!("  {} Removed vgrep from Codex", style("[-]").green());
     }
@@ -284,7 +285,7 @@ pub fn install_droid() -> Result<()> {
     fs::create_dir_all(&skills_dir)?;
 
     let skill_content = VGREP_SKILL.trim();
-    fs::write(skills_dir.join("SKILL.md"), skill_content)?;
+    write_atomic(skills_dir.join("SKILL.md"), skill_content)?;
     println!("  {} Created vgrep skill", style("[+]").green());
 
     // Create hooks
@@ -344,8 +345,8 @@ if __name__ == "__main__":
     main()
 "#;
 
-    fs::write(hooks_dir.join("vgrep_watch.py"), watch_hook)?;
-    fs::write(hooks_dir.join("vgrep_watch_kill.py"), kill_hook)?;
+    write_atomic(hooks_dir.join("vgrep_watch.py"), watch_hook)?;
+    write_atomic(hooks_dir.join("vgrep_watch_kill.py"), kill_hook)?;
     println!("  {} Created vgrep hooks", style("[+]").green());
 
     // Update settings.json
@@ -412,7 +413,7 @@ if __name__ == "__main__":
     }
 
     settings["hooks"] = serde_json::Value::Object(hooks);
-    fs::write(&settings_path, serde_json::to_string_pretty(&settings)?)?;
+    write_atomic(&settings_path, serde_json::to_string_pretty(&settings)?)?;
     println!("  {} Updated Factory Droid settings", style("[+]").green());
 
     println!();
@@ -461,7 +462,7 @@ pub fn uninstall_droid() -> Result<()> {
                         obj.retain(|_, v| v.as_array().map(|a| !a.is_empty()).unwrap_or(true));
                     }
                 }
-                fs::write(&settings_path, serde_json::to_string_pretty(&settings)?)?;
+                write_atomic(&settings_path, serde_json::to_string_pretty(&settings)?)?;
             }
         }
         println!("  {} Updated Factory Droid settings", style("[-]").green());
