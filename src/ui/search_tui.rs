@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind},
     execute,
@@ -13,6 +13,7 @@ use ratatui::{
     Frame, Terminal,
 };
 use std::io;
+use std::process::Command;
 
 use crate::core::{SearchEngine, SearchResult};
 
@@ -65,6 +66,42 @@ impl SearchTui {
         result
     }
 
+    fn open_file(&mut self, path: &std::path::Path, line: i32) -> Result<()> {
+        // Suspend TUI
+        disable_raw_mode()?;
+        execute!(io::stdout(), LeaveAlternateScreen, DisableMouseCapture)?;
+
+        let editor = std::env::var("EDITOR").unwrap_or_else(|_| "nano".to_string());
+        
+        let mut command = Command::new(&editor);
+        
+        // Handle common editors that support +LINE syntax
+        if editor.contains("vi") || editor.contains("nano") || editor.contains("emacs") {
+             command.arg(format!("+{}", line));
+        }
+        
+        let status = command
+            .arg(path)
+            .status()
+            .context("Failed to open editor")?;
+
+        if !status.success() {
+             self.status_message = Some(format!("Editor exited with error: {}", status));
+        }
+
+        // Restore TUI
+        enable_raw_mode()?;
+        execute!(io::stdout(), EnterAlternateScreen, EnableMouseCapture)?;
+        
+        // Redraw immediately
+        // We can't access terminal here directly to redraw, but the main loop will catch up on next iteration.
+        // However, to avoid a flash/blank screen until next event, we might want to trigger a redraw if possible,
+        // or just let the loop handle it.
+        // Since we are returning control to run_loop which calls terminal.draw(), it should be fine.
+        
+        Ok(())
+    }
+
     fn run_loop(&mut self, terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
         loop {
             terminal.draw(|f| self.ui(f))?;
@@ -111,10 +148,18 @@ impl SearchTui {
                         }
                         KeyCode::Enter => {
                             if let Some(selected) = self.list_state.selected() {
-                                if let Some(result) = self.results.get(selected) {
-                                    // Open file in default editor (or just print path)
-                                    self.status_message =
-                                        Some(format!("Selected: {}", result.path.display()));
+                                // Clone the necessary data to avoid borrowing self.results while calling open_file
+                                let result_data = self.results.get(selected).map(|r| (r.path.clone(), r.start_line));
+                                
+                                if let Some((path, start_line)) = result_data {
+                                    // Open file in default editor
+                                    if let Err(e) = self.open_file(&path, start_line + 1) {
+                                        self.status_message = Some(format!("Error opening file: {}", e));
+                                    } else {
+                                        self.status_message = Some(format!("Opened: {}", path.display()));
+                                        // Force a clear/redraw is implicit as we loop back
+                                        terminal.clear()?; 
+                                    }
                                 }
                             }
                         }
