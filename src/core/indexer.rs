@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use console::style;
 use ignore::WalkBuilder;
-use indicatif::{ProgressBar, ProgressStyle};
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -71,15 +71,16 @@ impl Indexer {
         println!("  {}Found {} files", ui::FILE, style(files.len()).cyan());
         println!();
 
+        let mp = MultiProgress::new();
+        
         // Phase 1: Collect all chunks from all files
-        println!("  {}Phase 1: Reading files...", style("→").dim());
-
-        let pb = ProgressBar::new(files.len() as u64);
+        let pb = mp.add(ProgressBar::new(files.len() as u64));
         pb.set_style(
             ProgressStyle::default_bar()
-                .template("    {spinner:.green} [{bar:30.cyan/blue}] {pos}/{len} {msg}")?
+                .template("{spinner:.green} [{bar:30.cyan/blue}] {pos}/{len} Reading files {msg}")?
                 .progress_chars("━━─"),
         );
+        pb.enable_steady_tick(std::time::Duration::from_millis(100));
 
         let mut pending_files: Vec<PendingFile> = Vec::new();
         let mut total_chunks = 0;
@@ -87,13 +88,13 @@ impl Indexer {
 
         for entry in &files {
             let file_path = entry.path();
-            pb.set_message(
-                file_path
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("")
-                    .to_string(),
-            );
+            let file_name = file_path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("")
+                .to_string();
+                
+            pb.set_message(file_name);
 
             match self.prepare_file(file_path, force) {
                 Ok(Some(pending)) => {
@@ -107,13 +108,11 @@ impl Indexer {
             pb.inc(1);
         }
 
-        pb.finish_and_clear();
-        println!(
-            "    {}Read {} files, {} chunks",
-            ui::CHECK,
+        pb.finish_with_message(format!(
+            "Phase 1: Read {} files, {} chunks",
             pending_files.len(),
             total_chunks
-        );
+        ));
 
         if pending_files.is_empty() {
             println!();
@@ -122,38 +121,30 @@ impl Indexer {
         }
 
         // Phase 2: Generate embeddings for all chunks at once
-        println!("  {}Phase 2: Generating embeddings...", style("→").dim());
-
         let all_chunks: Vec<&str> = pending_files
             .iter()
             .flat_map(|f| f.chunks.iter().map(|c| c.content.as_str()))
             .collect();
 
-        let pb = ProgressBar::new_spinner();
-        pb.set_style(
-            ProgressStyle::default_spinner()
-                .template("    {spinner:.green} Embedding {msg} chunks...")?,
-        );
-        pb.set_message(format!("{}", all_chunks.len()));
-
-        let all_embeddings = self.engine.embed_batch(&all_chunks)?;
-
-        pb.finish_and_clear();
-        println!(
-            "    {}Generated {} embeddings",
-            ui::CHECK,
-            all_embeddings.len()
-        );
-
-        // Phase 3: Store in database
-        println!("  {}Phase 3: Storing in database...", style("→").dim());
-
-        let pb = ProgressBar::new(pending_files.len() as u64);
+        let pb = mp.add(ProgressBar::new(all_chunks.len() as u64));
         pb.set_style(
             ProgressStyle::default_bar()
-                .template("    {spinner:.green} [{bar:30.cyan/blue}] {pos}/{len}")?
+                .template("{spinner:.green} [{bar:30.cyan/blue}] {pos}/{len} Generating embeddings ({eta})")?
                 .progress_chars("━━─"),
         );
+        pb.enable_steady_tick(std::time::Duration::from_millis(100));
+
+        let all_embeddings = self.engine.embed_batch(&all_chunks)?;
+        pb.finish_with_message(format!("Phase 2: Generated {} embeddings", all_embeddings.len()));
+
+        // Phase 3: Store in database
+        let pb = mp.add(ProgressBar::new(pending_files.len() as u64));
+        pb.set_style(
+            ProgressStyle::default_bar()
+                .template("{spinner:.green} [{bar:30.cyan/blue}] {pos}/{len} Storing in database ({eta})")?
+                .progress_chars("━━─"),
+        );
+        pb.enable_steady_tick(std::time::Duration::from_millis(100));
 
         let mut embedding_idx = 0;
         let mut indexed = 0;
@@ -180,8 +171,7 @@ impl Indexer {
             pb.inc(1);
         }
 
-        pb.finish_and_clear();
-        println!("    {}Stored {} files", ui::CHECK, indexed);
+        pb.finish_with_message(format!("Phase 3: Stored {} files", indexed));
 
         println!();
         println!("  {}Indexing complete!", ui::SPARKLES);
@@ -436,18 +426,18 @@ impl ServerIndexer {
             return Ok(());
         }
 
-        println!("  {}Found {} files", ui::FILE, style(files.len()).cyan());
         println!();
 
+        let mp = MultiProgress::new();
+        
         // Phase 1: Collect all chunks
-        println!("  {}Phase 1: Reading files...", style("→").dim());
-
-        let pb = ProgressBar::new(files.len() as u64);
+        let pb = mp.add(ProgressBar::new(files.len() as u64));
         pb.set_style(
             ProgressStyle::default_bar()
-                .template("    {spinner:.green} [{bar:30.cyan/blue}] {pos}/{len} {msg}")?
+                .template("{spinner:.green} [{bar:30.cyan/blue}] {pos}/{len} Reading files {msg}")?
                 .progress_chars("━━─"),
         );
+        pb.enable_steady_tick(std::time::Duration::from_millis(100));
 
         let mut pending_files: Vec<PendingFile> = Vec::new();
         let mut total_chunks = 0;
@@ -455,13 +445,13 @@ impl ServerIndexer {
 
         for entry in &files {
             let file_path = entry.path();
-            pb.set_message(
-                file_path
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("")
-                    .to_string(),
-            );
+            let file_name = file_path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("")
+                .to_string();
+                
+            pb.set_message(file_name);
 
             match self.prepare_file(file_path, force) {
                 Ok(Some(pending)) => {
@@ -475,13 +465,11 @@ impl ServerIndexer {
             pb.inc(1);
         }
 
-        pb.finish_and_clear();
-        println!(
-            "    {}Read {} files, {} chunks",
-            ui::CHECK,
+        pb.finish_with_message(format!(
+            "Phase 1: Read {} files, {} chunks",
             pending_files.len(),
             total_chunks
-        );
+        ));
 
         if pending_files.is_empty() {
             println!();
@@ -489,26 +477,22 @@ impl ServerIndexer {
             return Ok(());
         }
 
-        // Phase 2: Generate embeddings via server (in batches to avoid huge requests)
-        println!(
-            "  {}Phase 2: Generating embeddings via server...",
-            style("→").dim()
-        );
-
+        // Phase 2: Generate embeddings via server
         let all_chunks: Vec<String> = pending_files
             .iter()
             .flat_map(|f| f.chunks.iter().map(|c| c.content.clone()))
             .collect();
 
-        let batch_size = 50; // Process 50 chunks at a time
+        let batch_size = 50; 
         let mut all_embeddings: Vec<Vec<f32>> = Vec::with_capacity(all_chunks.len());
 
-        let pb = ProgressBar::new(all_chunks.len() as u64);
+        let pb = mp.add(ProgressBar::new(all_chunks.len() as u64));
         pb.set_style(
             ProgressStyle::default_bar()
-                .template("    {spinner:.green} [{bar:30.cyan/blue}] {pos}/{len} chunks")?
+                .template("{spinner:.green} [{bar:30.cyan/blue}] {pos}/{len} Generating embeddings ({eta})")?
                 .progress_chars("━━─"),
         );
+        pb.enable_steady_tick(std::time::Duration::from_millis(100));
 
         for batch in all_chunks.chunks(batch_size) {
             let batch_refs: Vec<&str> = batch.iter().map(|s| s.as_str()).collect();
@@ -517,22 +501,16 @@ impl ServerIndexer {
             pb.inc(batch.len() as u64);
         }
 
-        pb.finish_and_clear();
-        println!(
-            "    {}Generated {} embeddings",
-            ui::CHECK,
-            all_embeddings.len()
-        );
+        pb.finish_with_message(format!("Phase 2: Generated {} embeddings", all_embeddings.len()));
 
         // Phase 3: Store in database
-        println!("  {}Phase 3: Storing in database...", style("→").dim());
-
-        let pb = ProgressBar::new(pending_files.len() as u64);
+        let pb = mp.add(ProgressBar::new(pending_files.len() as u64));
         pb.set_style(
             ProgressStyle::default_bar()
-                .template("    {spinner:.green} [{bar:30.cyan/blue}] {pos}/{len}")?
+                .template("{spinner:.green} [{bar:30.cyan/blue}] {pos}/{len} Storing in database ({eta})")?
                 .progress_chars("━━─"),
         );
+        pb.enable_steady_tick(std::time::Duration::from_millis(100));
 
         let mut embedding_idx = 0;
         let mut indexed = 0;
@@ -557,8 +535,7 @@ impl ServerIndexer {
             pb.inc(1);
         }
 
-        pb.finish_and_clear();
-        println!("    {}Stored {} files", ui::CHECK, indexed);
+        pb.finish_with_message(format!("Phase 3: Stored {} files", indexed));
 
         println!();
         println!("  {}Indexing complete!", ui::SPARKLES);
