@@ -168,24 +168,31 @@ impl Database {
               WHERE f.path LIKE ?",
         )?;
 
-        let mut results: Vec<SearchResult> = stmt
-            .query_map([&like_pattern], |row| {
-                let embedding_blob: Vec<u8> = row.get(6)?;
-                let embedding = bytes_to_embedding(&embedding_blob);
-                let similarity = cosine_similarity(query_embedding, &embedding);
+        let mut results: Vec<SearchResult> = Vec::new();
+        
+        for row_result in stmt.query_map([&like_pattern], |row| {
+            let embedding_blob: Vec<u8> = row.get(6)?;
+            let embedding = bytes_to_embedding(&embedding_blob);
+            let similarity = cosine_similarity(query_embedding, &embedding);
 
-                Ok(SearchResult {
-                    chunk_id: row.get(0)?,
-                    file_id: row.get(1)?,
-                    path: PathBuf::from(row.get::<_, String>(2)?),
-                    content: row.get(3)?,
-                    start_line: row.get(4)?,
-                    end_line: row.get(5)?,
-                    similarity,
-                })
-            })?
-            .filter_map(Result::ok)
-            .collect();
+            Ok(SearchResult {
+                chunk_id: row.get(0)?,
+                file_id: row.get(1)?,
+                path: PathBuf::from(row.get::<_, String>(2)?),
+                content: row.get(3)?,
+                start_line: row.get(4)?,
+                end_line: row.get(5)?,
+                similarity,
+            })
+        })? {
+            match row_result {
+                Ok(result) => results.push(result),
+                Err(e) => {
+                    tracing::warn!("Skipping corrupted chunk or search result: {}", e);
+                    // Continue processing other rows
+                }
+            }
+        }
 
         // Sort by similarity (highest first)
         results.sort_by(|a, b| {
@@ -204,21 +211,27 @@ impl Database {
               FROM chunks WHERE file_id = ? ORDER BY chunk_index",
         )?;
 
-        let results = stmt
-            .query_map([file_id], |row| {
-                let embedding_blob: Vec<u8> = row.get(6)?;
-                Ok(ChunkEntry {
-                    id: row.get(0)?,
-                    file_id: row.get(1)?,
-                    chunk_index: row.get(2)?,
-                    content: row.get(3)?,
-                    start_line: row.get(4)?,
-                    end_line: row.get(5)?,
-                    embedding: bytes_to_embedding(&embedding_blob),
-                })
-            })?
-            .filter_map(Result::ok)
-            .collect();
+        let mut results: Vec<ChunkEntry> = Vec::new();
+
+        for row_result in stmt.query_map([file_id], |row| {
+            let embedding_blob: Vec<u8> = row.get(6)?;
+            Ok(ChunkEntry {
+                id: row.get(0)?,
+                file_id: row.get(1)?,
+                chunk_index: row.get(2)?,
+                content: row.get(3)?,
+                start_line: row.get(4)?,
+                end_line: row.get(5)?,
+                embedding: bytes_to_embedding(&embedding_blob),
+            })
+        })? {
+            match row_result {
+                Ok(entry) => results.push(entry),
+                Err(e) => {
+                    tracing::warn!("Skipping corrupted chunk entry: {}", e);
+                }
+            }
+        }
 
         Ok(results)
     }
@@ -253,17 +266,23 @@ impl Database {
             .conn
             .prepare("SELECT id, path, hash, indexed_at FROM files")?;
 
-        let results = stmt
-            .query_map([], |row| {
-                Ok(FileEntry {
-                    id: row.get(0)?,
-                    path: PathBuf::from(row.get::<_, String>(1)?),
-                    hash: row.get(2)?,
-                    indexed_at: row.get::<_, String>(3)?.parse().unwrap_or_default(),
-                })
-            })?
-            .filter_map(Result::ok)
-            .collect();
+        let mut results: Vec<FileEntry> = Vec::new();
+        
+        for row_result in stmt.query_map([], |row| {
+            Ok(FileEntry {
+                id: row.get(0)?,
+                path: PathBuf::from(row.get::<_, String>(1)?),
+                hash: row.get(2)?,
+                indexed_at: row.get::<_, String>(3)?.parse().unwrap_or_default(),
+            })
+        })? {
+            match row_result {
+                Ok(entry) => results.push(entry),
+                Err(e) => {
+                    tracing::warn!("Skipping corrupted file entry: {}", e);
+                }
+            }
+        }
 
         Ok(results)
     }
@@ -297,7 +316,7 @@ fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
         },
     );
 
-    if norm_a == 0.0 || norm_b == 0.0 {
+        if norm_a == 0.0 || norm_b == 0.0 {
         return 0.0;
     }
 
