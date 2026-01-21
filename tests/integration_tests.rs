@@ -59,3 +59,12 @@ fn test_config_show() {
         .success()
         .stdout(predicate::str::contains("Chunk size"));
 }
+
+#[test]
+fn test_config_set_invalid_mode() {
+    vgrep()
+        .args(["config", "set", "mode", "invalid_value"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Invalid mode 'invalid_value'. Valid values are: server, local"));
+}
