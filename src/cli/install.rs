@@ -58,7 +58,7 @@ pub fn install_claude_code() -> Result<()> {
         String::new()
     };
 
-    if !content.contains("vgrep") {
+    if !content.contains("name: vgrep") {
         content.push_str("\n\n");
         content.push_str(VGREP_SKILL.trim());
         fs::write(&instructions_path, content)?;
@@ -225,7 +225,7 @@ pub fn install_codex() -> Result<()> {
         String::new()
     };
 
-    if !content.contains("vgrep") {
+    if !content.contains("name: vgrep") {
         content.push_str("\n\n");
         content.push_str(VGREP_SKILL.trim());
         fs::write(&agents_path, content)?;
