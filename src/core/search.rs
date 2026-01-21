@@ -24,7 +24,6 @@ impl SearchEngine {
         db: Database,
         embedding_engine: EmbeddingEngine,
         _config: &Config,
-        _use_reranker: bool,
     ) -> Result<Self> {
         // Note: Reranker disabled for now as it requires a separate backend
         // which conflicts with the embedding engine's backend

@@ -670,7 +670,11 @@ fn run_search_local(
 
     let db = Database::new(&config.db_path()?)?;
     let engine = EmbeddingEngine::new(config)?;
-    let search = SearchEngine::new(db, engine, config, config.use_reranker)?;
+    let search = SearchEngine::new(db, engine, config)?;
+
+    if config.use_reranker {
+        ui::print_warning("Reranking is currently disabled pending backend updates.");
+    }
 
     if interactive {
         let mut tui = SearchTui::new(search)?;
