@@ -198,6 +198,20 @@ async fn search(
 
     let abs_path = std::fs::canonicalize(&path).unwrap_or(path);
 
+    // Validate that the path is within the current working directory (or allowed root)
+    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let abs_cwd = std::fs::canonicalize(&cwd).unwrap_or(cwd);
+    
+    if !abs_path.starts_with(&abs_cwd) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "error": "Invalid path: traversal attempt detected or path outside working directory"
+            })),
+        )
+            .into_response();
+    }
+
     // Generate query embedding
     let query_embedding = {
         let engine = match state.embedding_engine.lock() {
