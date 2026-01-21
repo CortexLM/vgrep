@@ -515,7 +515,13 @@ fn run_index(
                 return Ok(());
             }
 
-            let db = Database::new(&config.db_path()?)?;
+            let db_path = config.db_path()?;
+            if let Some(parent) = db_path.parent() {
+                if !parent.exists() {
+                    std::fs::create_dir_all(parent).context("Failed to create database directory")?;
+                }
+            }
+            let db = Database::new(&db_path)?;
             let indexer = ServerIndexer::new(db, client, max_size);
             indexer.index_directory(&path, force)?;
         }
@@ -529,7 +535,13 @@ fn run_index(
                 return Ok(());
             }
 
-            let db = Database::new(&config.db_path()?)?;
+            let db_path = config.db_path()?;
+            if let Some(parent) = db_path.parent() {
+                if !parent.exists() {
+                    std::fs::create_dir_all(parent).context("Failed to create database directory")?;
+                }
+            }
+            let db = Database::new(&db_path)?;
             let engine = EmbeddingEngine::new(config)?;
             let indexer = Indexer::new(db, engine, max_size);
             indexer.index_directory(&path, force)?;
