@@ -59,10 +59,15 @@ impl FileWatcher {
         let running = Arc::new(AtomicBool::new(true));
         let r = running.clone();
 
-        ctrlc::set_handler(move || {
+        if let Err(e) = ctrlc::set_handler(move || {
             r.store(false, Ordering::SeqCst);
-        })
-        .expect("Error setting Ctrl+C handler");
+        }) {
+            eprintln!(
+                "{} Failed to set Ctrl+C handler: {}",
+                style("Warning:").yellow().bold(),
+                e
+            );
+        }
 
         // Initial index
         println!("  {} Initial indexing...", style(">>").dim());
