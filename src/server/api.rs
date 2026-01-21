@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use tower_governor::{governor::GovernorConfigBuilder, GovernorLayer};
 use tower_http::cors::{Any, CorsLayer};
 
 use crate::config::Config;
@@ -108,6 +109,16 @@ pub async fn run_server(config: &Config, host: &str, port: u16) -> Result<()> {
         .allow_methods(Any)
         .allow_headers(Any);
 
+    // Rate limiting: 60 requests per second with a burst of 10
+    // This protects against simple DoS attacks and embedding abuse
+    let governor_conf = Arc::new(
+        GovernorConfigBuilder::default()
+            .per_second(60)
+            .burst_size(10)
+            .finish()
+            .unwrap(),
+    );
+
     let app = Router::new()
         .route("/", get(root))
         .route("/health", get(health))
@@ -116,6 +127,7 @@ pub async fn run_server(config: &Config, host: &str, port: u16) -> Result<()> {
         .route("/embed", post(embed))
         .route("/embed_batch", post(embed_batch))
         .layer(cors)
+        .layer(GovernorLayer::new(governor_conf))
         .with_state(state);
 
     let addr: SocketAddr = format!("{}:{}", host, port).parse()?;
