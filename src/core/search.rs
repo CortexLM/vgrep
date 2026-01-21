@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
@@ -91,7 +91,8 @@ impl SearchEngine {
     }
 
     pub fn search_interactive(&self, query: &str, max_results: usize) -> Result<Vec<SearchResult>> {
-        let cwd = std::env::current_dir()?;
+        let cwd = std::env::current_dir()
+            .context("Failed to get current directory - it may have been deleted or is inaccessible")?;
         self.search(query, &cwd, max_results)
     }
 
