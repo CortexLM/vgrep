@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use std::num::NonZeroU32;
 use std::path::Path;
 use std::sync::Once;
 
@@ -78,6 +79,7 @@ impl EmbeddingEngine {
             .unwrap_or(4);
 
         let ctx_params = LlamaContextParams::default()
+            .with_n_ctx(Some(NonZeroU32::new(self.n_ctx as u32).unwrap()))
             .with_n_threads_batch(n_threads)
             .with_n_threads(n_threads)
             .with_embeddings(true);
