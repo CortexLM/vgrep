@@ -384,6 +384,9 @@ impl Config {
     }
 
     pub fn set_watch_debounce(&mut self, ms: u64) -> Result<()> {
+        if ms < 10 {
+            anyhow::bail!("Watch debounce must be at least 10ms");
+        }
         self.watch_debounce_ms = ms;
         self.save()
     }
