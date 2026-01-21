@@ -265,40 +265,60 @@ impl Config {
         hex::encode(&result[..8]) // First 8 bytes = 16 hex chars
     }
 
-    /// Get full path to embedding model
+    /// Get full path to embedding model.
+    /// This resolves the path and checks for existence.
+    /// Returns error if model file doesn't exist.
     pub fn embedding_model_path(&self) -> Result<PathBuf> {
         let model_path = PathBuf::from(&self.embedding_model);
-        if model_path.is_absolute() && model_path.exists() {
-            Ok(model_path)
+        
+        let resolved_path = if model_path.is_absolute() {
+            model_path
         } else {
             let models_dir = self.get_models_dir()?;
-            Ok(models_dir.join(&self.embedding_model))
+            models_dir.join(&self.embedding_model)
+        };
+
+        if !resolved_path.exists() {
+            anyhow::bail!(
+                "Embedding model not found at: {}\nPlease run 'vgrep models download' to download the default model, or use 'vgrep config set embedding_model <path>' to set a valid model path.",
+                resolved_path.display()
+            );
         }
+
+        Ok(resolved_path)
     }
 
     /// Get full path to reranker model
+    /// This resolves the path and checks for existence.
+    /// Returns error if model file doesn't exist.
     pub fn reranker_model_path(&self) -> Result<PathBuf> {
         let model_path = PathBuf::from(&self.reranker_model);
-        if model_path.is_absolute() && model_path.exists() {
-            Ok(model_path)
+        
+        let resolved_path = if model_path.is_absolute() {
+            model_path
         } else {
             let models_dir = self.get_models_dir()?;
-            Ok(models_dir.join(&self.reranker_model))
+            models_dir.join(&self.reranker_model)
+        };
+
+        if !resolved_path.exists() {
+            anyhow::bail!(
+                "Reranker model not found at: {}\nPlease run 'vgrep models download' to download the default model, or use 'vgrep config set reranker_model <path>' to set a valid model path.",
+                resolved_path.display()
+            );
         }
+
+        Ok(resolved_path)
     }
 
     /// Check if embedding model exists
     pub fn has_embedding_model(&self) -> bool {
-        self.embedding_model_path()
-            .map(|p| p.exists())
-            .unwrap_or(false)
+        self.embedding_model_path().is_ok()
     }
 
     /// Check if reranker model exists
     pub fn has_reranker_model(&self) -> bool {
-        self.reranker_model_path()
-            .map(|p| p.exists())
-            .unwrap_or(false)
+        self.reranker_model_path().is_ok()
     }
 
     /// Get number of threads (auto-detect if 0)
