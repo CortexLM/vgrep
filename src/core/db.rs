@@ -3,6 +3,8 @@ use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection};
 use std::path::{Path, PathBuf};
 
+use super::filter::FileFilter;
+
 pub struct Database {
     conn: Connection,
 }
@@ -156,6 +158,7 @@ impl Database {
         &self,
         query_embedding: &[f32],
         path_prefix: &Path,
+        filter: Option<&FileFilter>,
         limit: usize,
     ) -> Result<Vec<SearchResult>> {
         let path_prefix_str = path_prefix.to_string_lossy();
@@ -185,6 +188,13 @@ impl Database {
                 })
             })?
             .filter_map(Result::ok)
+            .filter(|r| {
+                if let Some(f) = filter {
+                    f.matches(&r.path)
+                } else {
+                    true
+                }
+            })
             .collect();
 
         // Sort by similarity (highest first)

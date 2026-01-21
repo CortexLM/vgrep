@@ -241,7 +241,7 @@ async fn search(
         }
     };
 
-    let candidates = match db.search_similar(&query_embedding, &abs_path, req.max_results * 3) {
+    let candidates = match db.search_similar(&query_embedding, &abs_path, None, req.max_results * 3) {
         Ok(c) => c,
         Err(e) => {
             return (

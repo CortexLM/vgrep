@@ -5,7 +5,9 @@ use std::path::{Path, PathBuf};
 
 use super::interactive;
 use crate::config::{Config, Mode};
-use crate::core::{Database, EmbeddingEngine, Indexer, SearchEngine, ServerIndexer};
+use crate::core::{
+    Database, EmbeddingEngine, FileFilter, Indexer, SearchEngine, ServerIndexer,
+};
 use crate::server::{self, Client};
 use crate::ui::{self, SearchTui};
 use crate::watcher::FileWatcher;
@@ -95,6 +97,22 @@ enum Commands {
         /// Sync/index before searching
         #[arg(short = 's', long)]
         sync: bool,
+
+        /// Filter by file extension (comma-separated, e.g., "rs,toml")
+        #[arg(long)]
+        ext: Option<String>,
+
+        /// Include only files matching these glob patterns (comma-separated)
+        #[arg(long)]
+        glob: Option<String>,
+
+        /// Exclude files matching these glob patterns (comma-separated)
+        #[arg(long)]
+        exclude: Option<String>,
+
+        /// Filter by file type category (e.g., "code", "config", "docs")
+        #[arg(long)]
+        r#type: Option<String>,
     },
 
     /// Watch directory for changes and auto-index
@@ -268,6 +286,7 @@ impl Cli {
                 show_content,
                 false,
                 false,
+                None,
             );
         }
 
@@ -289,11 +308,18 @@ impl Cli {
                 content,
                 interactive,
                 sync,
+                ext,
+                glob,
+                exclude,
+                r#type,
             }) => {
                 let max_results = max_results
                     .or(self.max_results)
                     .unwrap_or(config.max_results);
                 let content = content || self.content || config.show_content;
+
+                let filter = build_file_filter(ext, glob, exclude, r#type);
+
                 run_search_smart(
                     &config,
                     &query,
@@ -302,6 +328,7 @@ impl Cli {
                     content,
                     interactive,
                     sync,
+                    filter.as_ref(),
                 )
             }
             Some(Commands::Watch { path, dry_run }) => {
@@ -337,6 +364,66 @@ impl Cli {
             }
         }
     }
+}
+
+fn build_file_filter(
+    ext: Option<String>,
+    glob: Option<String>,
+    exclude: Option<String>,
+    type_category: Option<String>,
+) -> Option<FileFilter> {
+    if ext.is_none() && glob.is_none() && exclude.is_none() && type_category.is_none() {
+        return None;
+    }
+
+    let mut extensions = Vec::new();
+    let mut include_globs = Vec::new();
+    let mut exclude_globs = Vec::new();
+
+    if let Some(e) = ext {
+        extensions.extend(e.split(',').map(|s| s.trim().to_string()));
+    }
+
+    if let Some(g) = glob {
+        include_globs.extend(g.split(',').map(|s| s.trim().to_string()));
+    }
+
+    if let Some(e) = exclude {
+        exclude_globs.extend(e.split(',').map(|s| s.trim().to_string()));
+    }
+
+    if let Some(t) = type_category {
+        match t.as_str() {
+            "code" => extensions.extend(
+                vec![
+                    "rs", "py", "js", "ts", "c", "cpp", "h", "hpp", "go", "java", "rb", "php", "sh",
+                ]
+                .into_iter()
+                .map(String::from),
+            ),
+            "config" => extensions.extend(
+                vec![
+                    "toml", "json", "yaml", "yml", "xml", "ini", "conf", "config", "properties",
+                ]
+                .into_iter()
+                .map(String::from),
+            ),
+            "docs" => extensions.extend(
+                vec!["md", "txt", "rst", "adoc", "pdf"]
+                    .into_iter()
+                    .map(String::from),
+            ),
+            _ => {
+                // Treat unknown types as single extensions for now, or just warn
+                // For now, we'll assume it might be a custom type which we don't support yet,
+                // so we just add it as an extension to be safe? No, that's confusing.
+                // Let's print a warning if possible, but we are in a helper function.
+                // We'll just ignore unknown types for now.
+            }
+        }
+    }
+
+    Some(FileFilter::new(extensions, include_globs, exclude_globs))
 }
 
 fn print_quick_help() {
@@ -547,6 +634,7 @@ fn run_search_smart(
     show_content: bool,
     interactive: bool,
     sync: bool,
+    filter: Option<&FileFilter>,
 ) -> Result<()> {
     if sync {
         run_index(
@@ -576,13 +664,18 @@ fn run_search_smart(
                     max_results,
                     show_content,
                     interactive,
+                    filter,
                 );
             }
 
+            // Note: Filters not yet supported in server mode
+            if filter.is_some() {
+                 ui::print_warning("Filters are currently only supported in local mode. Ignoring filters.");
+            }
             run_search_server(&client, query, path, max_results, show_content)
         }
         Mode::Local => {
-            run_search_local(config, query, path, max_results, show_content, interactive)
+            run_search_local(config, query, path, max_results, show_content, interactive, filter)
         }
     }
 }
@@ -653,6 +746,7 @@ fn run_search_local(
     max_results: usize,
     show_content: bool,
     interactive: bool,
+    filter: Option<&FileFilter>,
 ) -> Result<()> {
     use std::time::Instant;
 
@@ -684,7 +778,7 @@ fn run_search_local(
         println!();
 
         let start = Instant::now();
-        let results = search.search(query, path, max_results)?;
+        let results = search.search(query, path, filter, max_results)?;
         let elapsed = start.elapsed();
 
         if results.is_empty() {
