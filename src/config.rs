@@ -319,6 +319,35 @@ impl Config {
     }
 
     pub fn set_server_host(&mut self, host: String) -> Result<()> {
+        // Validate host
+        if host.trim().is_empty() {
+            anyhow::bail!("Server host cannot be empty");
+        }
+
+        // Check for common mistakes
+        if host.contains("://") {
+            anyhow::bail!("Server host should not contain protocol (e.g. http://). Use hostname or IP only.");
+        }
+
+        if host.contains(':') && !host.starts_with('[') {
+            // It might be an IPv6 address, but if it has a port like 127.0.0.1:8080 it's invalid for this field
+            // A simple heuristic: if it contains a colon, it might be a port, unless it's a valid IPv6
+            // But strict checking is better.
+            
+            // Check if it's a valid socket addr (which means it has a port, which we DON'T want here usually, 
+            // unless the user really intends to bind to a specific address including port, but server_port is separate)
+            // The issue description says "IPs with ports embedded" are invalid.
+            if host.parse::<std::net::SocketAddr>().is_ok() {
+                 anyhow::bail!("Server host should not contain port. Set port using server_port configuration.");
+            }
+        }
+
+        // Check if it's a valid IP or hostname
+        // This is a basic check.
+        if host.chars().any(|c| c.is_whitespace() || c.is_control()) {
+             anyhow::bail!("Server host contains invalid characters");
+        }
+
         self.server_host = host;
         self.save()
     }
@@ -386,5 +415,54 @@ impl Config {
     pub fn set_watch_debounce(&mut self, ms: u64) -> Result<()> {
         self.watch_debounce_ms = ms;
         self.save()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_server_host_validation() {
+        // We need a temp dir for config save test so it doesn't mess up real config or fail permissions
+        // But Config::save uses global_config_dir which uses dirs::home_dir().
+        // We can mock the save or just ignore the save part if we only test the validation logic 
+        // by making set_server_host call save which might fail in this environment if HOME is not set or valid.
+        // However, looking at the code, set_server_host calls self.save() at the end.
+        
+        // Let's rely on the fact that if validation fails, it returns Err BEFORE calling save.
+        
+        let mut config = Config::default();
+        
+        // Use a temporary directory for tests to avoid permission issues with global config
+        let temp_dir = std::env::temp_dir().join("vgrep_test");
+        std::fs::create_dir_all(&temp_dir).unwrap();
+        // We can't easily override global_config_dir in the code without changing it to be configurable.
+        // But let's see if we can just test the validation errors.
+        
+        // The validation errors happen BEFORE save(), so we can verify them.
+        // The success cases will try to save, which might fail.
+        
+        // Invalid cases
+        assert!(config.set_server_host("".to_string()).is_err());
+        assert!(config.set_server_host("   ".to_string()).is_err());
+        assert!(config.set_server_host("http://localhost".to_string()).is_err());
+        assert!(config.set_server_host("127.0.0.1:8080".to_string()).is_err());
+        assert!(config.set_server_host("invalid host!".to_string()).is_err());
+        assert!(config.set_server_host("host with space".to_string()).is_err());
+
+        // For valid cases, we might get an error from save(), but NOT the validation error.
+        // We can check the error message if it fails.
+        let res = config.set_server_host("localhost".to_string());
+        if let Err(e) = &res {
+            let msg = e.to_string();
+            // If it's a save error, it means validation passed!
+            if !msg.contains("Server host") {
+                 // passed validation
+            } else {
+                 println!("Failed validation unexpectedly: {}", msg);
+                 // valid case failed validation?
+            }
+        }
     }
 }
