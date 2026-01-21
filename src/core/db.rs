@@ -3,6 +3,32 @@ use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection};
 use std::path::{Path, PathBuf};
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_invalid_date_parsing_returns_error() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test.db");
+        let db = Database::new(&db_path).unwrap();
+
+        // Insert a record manually with invalid date using raw SQL
+        let conn = Connection::open(&db_path).unwrap();
+        conn.execute(
+            "INSERT INTO files (path, hash, indexed_at) VALUES (?, ?, ?)",
+            params!["test_file.txt", "hash123", "invalid-date-string"],
+        ).unwrap();
+        
+        // Try to retrieve it using the API - now should fail instead of returning 1970
+        let result = db.get_file_by_path(Path::new("test_file.txt"));
+        
+        assert!(result.is_err(), "Should return error for invalid date");
+    }
+}
+
+
 pub struct Database {
     conn: Connection,
 }
@@ -89,11 +115,22 @@ impl Database {
             .prepare("SELECT id, path, hash, indexed_at FROM files WHERE path = ?")?;
 
         let result = stmt.query_row([path_str.as_ref()], |row| {
+            let indexed_at_str: String = row.get(3)?;
+            // Attempt to parse the date, but don't silently fail to default.
+            // If it fails, we return an error that will be propagated.
+            let indexed_at = indexed_at_str
+                .parse()
+                .map_err(|e| rusqlite::Error::FromSqlConversionFailure(
+                    3,
+                    rusqlite::types::Type::Text,
+                    Box::new(e),
+                ))?;
+
             Ok(FileEntry {
                 id: row.get(0)?,
                 path: PathBuf::from(row.get::<_, String>(1)?),
                 hash: row.get(2)?,
-                indexed_at: row.get::<_, String>(3)?.parse().unwrap_or_default(),
+                indexed_at,
             })
         });
 
@@ -255,11 +292,20 @@ impl Database {
 
         let results = stmt
             .query_map([], |row| {
+                let indexed_at_str: String = row.get(3)?;
+                let indexed_at = indexed_at_str
+                    .parse()
+                    .map_err(|e| rusqlite::Error::FromSqlConversionFailure(
+                        3,
+                        rusqlite::types::Type::Text,
+                        Box::new(e),
+                    ))?;
+                
                 Ok(FileEntry {
                     id: row.get(0)?,
                     path: PathBuf::from(row.get::<_, String>(1)?),
                     hash: row.get(2)?,
-                    indexed_at: row.get::<_, String>(3)?.parse().unwrap_or_default(),
+                    indexed_at,
                 })
             })?
             .filter_map(Result::ok)
