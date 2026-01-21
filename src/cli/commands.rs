@@ -108,6 +108,17 @@ enum Commands {
         dry_run: bool,
     },
 
+    /// Clean up stale index entries
+    Clean {
+        /// Dry run (show what would be cleaned up)
+        #[arg(short = 'd', long)]
+        dry_run: bool,
+
+        /// Force cleanup without confirmation
+        #[arg(short = 'f', long)]
+        force: bool,
+    },
+
     /// Start the vgrep server (keeps models loaded in memory)
     Serve {
         /// Host to bind to
@@ -311,6 +322,7 @@ impl Cli {
                 }
                 run_watch(&config, path)
             }
+            Some(Commands::Clean { dry_run, force }) => run_clean(&config, dry_run, force),
             Some(Commands::Serve { host, port }) => {
                 let host = host.unwrap_or_else(|| config.server_host.clone());
                 let port = port.unwrap_or(config.server_port);
@@ -358,6 +370,11 @@ fn print_quick_help() {
         "    {} {}             Watch and auto-index",
         style("vgrep").cyan(),
         style("watch").green()
+    );
+    println!(
+        "    {} {}             Clean stale entries",
+        style("vgrep").cyan(),
+        style("clean").green()
     );
     println!(
         "    {} {}             Start server",
@@ -723,6 +740,85 @@ fn run_search_local(
         println!();
     }
 
+    Ok(())
+}
+
+fn run_clean(config: &Config, dry_run: bool, force: bool) -> Result<()> {
+    ui::print_banner();
+    ui::print_header("Clean Up Index");
+
+    let db_path = config.db_path()?;
+    if !db_path.exists() {
+        ui::print_warning("Database not found. Nothing to clean.");
+        return Ok(());
+    }
+
+    let db = Database::new(&db_path)?;
+    let files = db.get_all_files()?;
+    
+    println!("  {} Checking {} indexed files...", ui::SEARCH, files.len());
+    
+    let mut stale_files = Vec::new();
+    
+    for file in files {
+        if !file.path.exists() {
+            stale_files.push(file);
+        }
+    }
+    
+    if stale_files.is_empty() {
+        ui::print_success("Index is clean! No stale entries found.");
+        return Ok(());
+    }
+    
+    println!();
+    println!("  Found {} stale entries:", style(stale_files.len()).yellow());
+    
+    for (i, file) in stale_files.iter().enumerate() {
+        if i < 10 {
+            println!("    {} {}", style("•").red(), file.path.display());
+        } else if i == 10 {
+            println!("    {} ... and {} more", style("•").dim(), stale_files.len() - 10);
+        }
+    }
+    println!();
+    
+    if dry_run {
+        println!("  {} Dry run: no changes made.", ui::CHECK);
+        println!("  Run without --dry-run to remove these entries.");
+        return Ok(());
+    }
+
+    if !force {
+        use dialoguer::Confirm;
+        
+        let confirmed = if console::user_attended() {
+            Confirm::new()
+                .with_prompt(format!("Remove {} stale entries?", stale_files.len()))
+                .default(true)
+                .interact()?
+        } else {
+            // Require --force for non-interactive use
+            println!("  Interactive mode not available. Use --force to confirm cleanup.");
+            return Ok(());
+        };
+            
+        if !confirmed {
+            println!("  Cancelled.");
+            return Ok(());
+        }
+    }
+    
+    println!("  Cleaning up...");
+    
+    let mut count = 0;
+    for file in stale_files {
+        db.delete_file(file.id)?;
+        count += 1;
+    }
+    
+    ui::print_success(&format!("Removed {} stale entries.", count));
+    
     Ok(())
 }
 
