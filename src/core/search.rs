@@ -40,7 +40,7 @@ impl SearchEngine {
         path: &Path,
         max_results: usize,
     ) -> Result<Vec<SearchResult>> {
-        let abs_path = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+        let abs_path = std::fs::canonicalize(path)?;
 
         // Generate query embedding
         let query_embedding = self.embedding_engine.embed(query)?;
