@@ -259,6 +259,11 @@ impl Cli {
         if self.command.is_none() && !self.query.is_empty() {
             let query = self.query.join(" ");
             let max_results = self.max_results.unwrap_or(config.max_results);
+
+            if max_results == 0 {
+                anyhow::bail!("max_results must be greater than 0");
+            }
+
             let show_content = self.content || config.show_content;
             return run_search_smart(
                 &config,
@@ -293,6 +298,11 @@ impl Cli {
                 let max_results = max_results
                     .or(self.max_results)
                     .unwrap_or(config.max_results);
+
+                if max_results == 0 {
+                    anyhow::bail!("max_results must be greater than 0");
+                }
+
                 let content = content || self.content || config.show_content;
                 run_search_smart(
                     &config,
