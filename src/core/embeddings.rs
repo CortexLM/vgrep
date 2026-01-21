@@ -90,9 +90,10 @@ impl EmbeddingEngine {
         let mut results = Vec::with_capacity(texts.len());
 
         for text in texts {
+            let clean_text = sanitize_text(text);
             let tokens = self
                 .model
-                .str_to_token(text, AddBos::Always)
+                .str_to_token(&clean_text, AddBos::Always)
                 .context("Failed to tokenize")?;
 
             let tokens: Vec<_> = if tokens.len() > self.n_ctx {
@@ -139,9 +140,36 @@ fn normalize(input: &[f32]) -> Vec<f32> {
     input.iter().map(|x| x / magnitude).collect()
 }
 
+fn sanitize_text(text: &str) -> String {
+    text.chars()
+        .filter(|&c| !c.is_control() || matches!(c, '\n' | '\t' | '\r'))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_sanitize_text() {
+        // Normal text should pass through
+        assert_eq!(sanitize_text("hello world"), "hello world");
+        
+        // Null bytes should be removed
+        assert_eq!(sanitize_text("hello\0world"), "helloworld");
+        
+        // Control characters should be removed
+        assert_eq!(sanitize_text("hello\x01world"), "helloworld");
+        assert_eq!(sanitize_text("hello\x1Fworld"), "helloworld");
+        
+        // Allowed whitespace should be preserved
+        assert_eq!(sanitize_text("hello\nworld"), "hello\nworld");
+        assert_eq!(sanitize_text("hello\tworld"), "hello\tworld");
+        assert_eq!(sanitize_text("hello\r\nworld"), "hello\r\nworld");
+        
+        // Mixed
+        assert_eq!(sanitize_text("h\0e\nl\x01l\to"), "he\nll\to");
+    }
 
     #[test]
     fn test_normalize() {
