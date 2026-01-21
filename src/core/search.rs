@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 
 use super::db::{Database, SearchResult as DbSearchResult};
 use super::embeddings::EmbeddingEngine;
+use super::filter::FileFilter;
 use crate::config::Config;
 
 pub struct SearchResult {
@@ -38,6 +39,7 @@ impl SearchEngine {
         &self,
         query: &str,
         path: &Path,
+        filter: Option<&FileFilter>,
         max_results: usize,
     ) -> Result<Vec<SearchResult>> {
         let abs_path = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
@@ -48,7 +50,7 @@ impl SearchEngine {
         // Search for similar chunks
         let candidates = self
             .db
-            .search_similar(&query_embedding, &abs_path, max_results * 3)?;
+            .search_similar(&query_embedding, &abs_path, filter, max_results * 3)?;
 
         if candidates.is_empty() {
             return Ok(Vec::new());
@@ -92,7 +94,7 @@ impl SearchEngine {
 
     pub fn search_interactive(&self, query: &str, max_results: usize) -> Result<Vec<SearchResult>> {
         let cwd = std::env::current_dir()?;
-        self.search(query, &cwd, max_results)
+        self.search(query, &cwd, None, max_results)
     }
 
     pub fn embed(&self, text: &str) -> Result<Vec<f32>> {
