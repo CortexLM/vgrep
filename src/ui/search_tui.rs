@@ -241,7 +241,7 @@ impl SearchTui {
                         Style::default().fg(Color::White),
                     ),
                     Span::styled(
-                        format!(" :{}:{}", r.start_line + 1, r.end_line + 1),
+                        format!(" :{}:{}", r.start_line, r.end_line),
                         Style::default().fg(Color::DarkGray),
                     ),
                 ]);
