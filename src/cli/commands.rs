@@ -862,11 +862,13 @@ fn run_models(action: ModelsAction, config: &mut Config) -> Result<()> {
                 pb.set_style(ProgressStyle::default_spinner().template("{spinner:.green} {msg}")?);
                 pb.set_message("Downloading...");
 
-                let embedding_path = api
+                let download_result = api
                     .model("Qwen/Qwen3-Embedding-0.6B-GGUF".to_string())
-                    .get("Qwen3-Embedding-0.6B-Q8_0.gguf")?;
+                    .get("Qwen3-Embedding-0.6B-Q8_0.gguf");
 
                 pb.finish_and_clear();
+                
+                let embedding_path = download_result?;
                 ui::print_success(&format!("Downloaded: {}", embedding_path.display()));
 
                 config.set_embedding_model(embedding_path.to_string_lossy().to_string())?;
@@ -889,11 +891,13 @@ fn run_models(action: ModelsAction, config: &mut Config) -> Result<()> {
                 pb.set_style(ProgressStyle::default_spinner().template("{spinner:.green} {msg}")?);
                 pb.set_message("Downloading...");
 
-                let reranker_path = api
+                let download_result = api
                     .model("sinjab/Qwen3-Reranker-0.6B-Q4_K_M-GGUF".to_string())
-                    .get("Qwen3-Reranker-0.6B-Q4_K_M.gguf")?;
+                    .get("Qwen3-Reranker-0.6B-Q4_K_M.gguf");
 
                 pb.finish_and_clear();
+
+                let reranker_path = download_result?;
                 ui::print_success(&format!("Downloaded: {}", reranker_path.display()));
 
                 config.set_reranker_model(reranker_path.to_string_lossy().to_string())?;
