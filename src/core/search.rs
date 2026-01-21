@@ -55,11 +55,12 @@ impl SearchEngine {
         }
 
         // Deduplicate by file (keep best chunk per file)
-        let mut best_per_file: HashMap<PathBuf, DbSearchResult> = HashMap::new();
+        // Use file_id for deduplication to handle symlinks correctly
+        let mut best_per_file: HashMap<i64, DbSearchResult> = HashMap::new();
 
         for result in candidates {
             let entry = best_per_file
-                .entry(result.path.clone())
+                .entry(result.file_id)
                 .or_insert(result.clone());
             if result.similarity > entry.similarity {
                 *entry = result;
