@@ -153,7 +153,7 @@ impl SearchTui {
 
         let i = match self.list_state.selected() {
             Some(i) => {
-                if i >= self.results.len() - 1 {
+                if i >= self.results.len().saturating_sub(1) {
                     0
                 } else {
                     i + 1
@@ -172,7 +172,7 @@ impl SearchTui {
         let i = match self.list_state.selected() {
             Some(i) => {
                 if i == 0 {
-                    self.results.len() - 1
+                    self.results.len().saturating_sub(1)
                 } else {
                     i - 1
                 }
