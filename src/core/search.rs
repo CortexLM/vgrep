@@ -78,11 +78,19 @@ impl SearchEngine {
             })
             .collect();
 
-        // Sort by score descending
+        // Sort by score descending, handling NaNs by pushing them to the end
         results.sort_by(|a, b| {
-            b.score
-                .partial_cmp(&a.score)
-                .unwrap_or(std::cmp::Ordering::Equal)
+            if b.score.is_nan() && a.score.is_nan() {
+                std::cmp::Ordering::Equal
+            } else if b.score.is_nan() {
+                std::cmp::Ordering::Less
+            } else if a.score.is_nan() {
+                std::cmp::Ordering::Greater
+            } else {
+                b.score
+                    .partial_cmp(&a.score)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            }
         });
 
         results.truncate(max_results);
