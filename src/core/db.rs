@@ -108,12 +108,22 @@ impl Database {
         let path_str = path.to_string_lossy();
         let now = Utc::now().to_rfc3339();
 
+        // Use UPSERT syntax (INSERT ... ON CONFLICT) instead of INSERT OR REPLACE
+        // This preserves the ID if the row exists, only updating fields
         self.conn.execute(
-            "INSERT OR REPLACE INTO files (path, hash, indexed_at) VALUES (?, ?, ?)",
+            "INSERT INTO files (path, hash, indexed_at) VALUES (?, ?, ?)
+             ON CONFLICT(path) DO UPDATE SET
+             hash = excluded.hash,
+             indexed_at = excluded.indexed_at",
             params![path_str.as_ref(), hash, now],
         )?;
 
-        Ok(self.conn.last_insert_rowid())
+        // If updated, last_insert_rowid might not point to the updated row in older sqlite versions
+        // or depending on driver behavior, so let's fetch the ID explicitly to be safe
+        let mut stmt = self.conn.prepare("SELECT id FROM files WHERE path = ?")?;
+        let id: i64 = stmt.query_row([path_str.as_ref()], |row| row.get(0))?;
+
+        Ok(id)
     }
 
     pub fn delete_file(&self, file_id: i64) -> Result<()> {
