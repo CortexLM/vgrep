@@ -1113,6 +1113,9 @@ fn run_config(action: Option<ConfigAction>, config: &mut Config) -> Result<()> {
                 }
                 ConfigKey::MaxFileSize => {
                     let size: u64 = value.parse().context("Invalid size")?;
+                    if size == 0 {
+                        anyhow::bail!("Max file size must be greater than 0");
+                    }
                     config.set_max_file_size(size * 1024)?;
                     format!("max_file_size = {} KB", size)
                 }
