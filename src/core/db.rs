@@ -187,11 +187,19 @@ impl Database {
             .filter_map(Result::ok)
             .collect();
 
-        // Sort by similarity (highest first)
+        // Sort by similarity (highest first), handling NaNs
         results.sort_by(|a, b| {
-            b.similarity
-                .partial_cmp(&a.similarity)
-                .unwrap_or(std::cmp::Ordering::Equal)
+            if b.similarity.is_nan() && a.similarity.is_nan() {
+                std::cmp::Ordering::Equal
+            } else if b.similarity.is_nan() {
+                std::cmp::Ordering::Less
+            } else if a.similarity.is_nan() {
+                std::cmp::Ordering::Greater
+            } else {
+                b.similarity
+                    .partial_cmp(&a.similarity)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            }
         });
 
         results.truncate(limit * 3); // Get more for reranking
