@@ -4,6 +4,8 @@ use notify::{
     Config as NotifyConfig, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
 };
 use std::collections::HashSet;
+use std::fs::{File, OpenOptions};
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
@@ -13,6 +15,107 @@ use std::time::{Duration, Instant};
 use crate::config::Config;
 use crate::core::{Database, Indexer, ServerIndexer};
 use crate::server::Client;
+
+/// Guard that removes the lock file when dropped
+struct LockFileGuard {
+    path: PathBuf,
+}
+
+impl Drop for LockFileGuard {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.path);
+    }
+}
+
+/// Attempts to acquire an exclusive lock for watching a directory.
+/// Returns a guard that releases the lock when dropped, or an error if another watcher is running.
+fn acquire_watcher_lock(project_path: &Path) -> Result<LockFileGuard> {
+    let config_dir = Config::global_config_dir()?;
+    let locks_dir = config_dir.join("locks");
+    std::fs::create_dir_all(&locks_dir)?;
+
+    // Create lock file path based on project path hash
+    let path_str = project_path.to_string_lossy();
+    let hash = {
+        use sha2::{Digest, Sha256};
+        let mut hasher = Sha256::new();
+        hasher.update(path_str.as_bytes());
+        let result = hasher.finalize();
+        hex::encode(&result[..8])
+    };
+    let lock_path = locks_dir.join(format!("{}.lock", hash));
+
+    // Check if lock file exists and contains a valid PID
+    if lock_path.exists() {
+        if let Ok(mut file) = File::open(&lock_path) {
+            let mut contents = String::new();
+            if file.read_to_string(&mut contents).is_ok() {
+                if let Ok(pid) = contents.trim().parse::<u32>() {
+                    // Check if process is still running
+                    if is_process_running(pid) {
+                        anyhow::bail!(
+                            "Another watcher is already running for this directory (PID: {})\n\
+                             Kill it first or use a different directory.",
+                            pid
+                        );
+                    }
+                }
+            }
+        }
+        // Stale lock file, remove it
+        let _ = std::fs::remove_file(&lock_path);
+    }
+
+    // Create new lock file with our PID
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(&lock_path)
+        .context("Failed to create lock file")?;
+
+    let pid = std::process::id();
+    writeln!(file, "{}", pid).context("Failed to write PID to lock file")?;
+
+    Ok(LockFileGuard { path: lock_path })
+}
+
+/// Check if a process with the given PID is still running
+fn is_process_running(pid: u32) -> bool {
+    // Check if /proc/<pid> exists (Linux) or try to send signal 0 via command (Unix)
+    #[cfg(target_os = "linux")]
+    {
+        std::path::Path::new(&format!("/proc/{}", pid)).exists()
+    }
+
+    #[cfg(all(unix, not(target_os = "linux")))]
+    {
+        // On macOS and other Unix, use ps command to check
+        std::process::Command::new("ps")
+            .args(["-p", &pid.to_string()])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    }
+
+    #[cfg(windows)]
+    {
+        // On Windows, use tasklist command to check
+        std::process::Command::new("tasklist")
+            .args(["/FI", &format!("PID eq {}", pid), "/NH"])
+            .output()
+            .map(|o| String::from_utf8_lossy(&o.stdout).contains(&pid.to_string()))
+            .unwrap_or(false)
+    }
+
+    #[cfg(not(any(unix, windows)))]
+    {
+        // On unsupported platforms, assume process is not running
+        false
+    }
+}
 
 pub struct FileWatcher {
     config: Config,
@@ -33,6 +136,9 @@ impl FileWatcher {
     pub fn watch(&self) -> Result<()> {
         let abs_path =
             std::fs::canonicalize(&self.root_path).context("Failed to resolve watch path")?;
+
+        // Acquire exclusive lock to prevent concurrent watchers
+        let _lock_guard = acquire_watcher_lock(&abs_path)?;
 
         // Clean up Windows path prefix
         let display_path = abs_path.to_string_lossy().replace("\\\\?\\", "");
