@@ -1076,7 +1076,9 @@ fn run_config(action: Option<ConfigAction>, config: &mut Config) -> Result<()> {
         Some(ConfigAction::Set { key, value }) => {
             let result = match key {
                 ConfigKey::Mode => {
-                    let mode: Mode = value.parse()?;
+                    let mode: Mode = value.parse().map_err(|_| {
+                        anyhow::anyhow!("Invalid mode '{}'. Valid values are: server, local", value)
+                    })?;
                     config.set_mode(mode)?;
                     format!("mode = {}", mode)
                 }
