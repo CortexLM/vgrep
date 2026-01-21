@@ -744,6 +744,18 @@ fn run_watch(config: &Config, path: PathBuf) -> Result<()> {
         }
     }
 
+    // Check if path exists and has valid permissions
+    if !path.exists() {
+        use anyhow::bail;
+        bail!("Path does not exist: {}", path.display());
+    }
+
+    // Try to access the directory to check permissions
+    if let Err(e) = std::fs::read_dir(&path) {
+        use anyhow::bail;
+        bail!("Failed to access directory '{}': {}. Check permissions.", path.display(), e);
+    }
+
     let watcher = FileWatcher::new(config.clone(), path);
     watcher.watch()
 }
