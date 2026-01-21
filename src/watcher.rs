@@ -80,7 +80,7 @@ impl FileWatcher {
                     let _ = tx.send(event);
                 }
             },
-            NotifyConfig::default().with_poll_interval(Duration::from_millis(self.debounce_ms)),
+            NotifyConfig::default(),
         )?;
 
         watcher.watch(&abs_path, RecursiveMode::Recursive)?;
