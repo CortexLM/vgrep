@@ -217,7 +217,10 @@ impl SearchTui {
 
         // Show cursor in input mode
         if self.mode == Mode::Input {
-            f.set_cursor_position((area.x + self.input.len() as u16 + 1, area.y + 1));
+            // Calculate cursor position safely, constraining it to the input area
+            let max_input_width = area.width.saturating_sub(2); // borders
+            let input_len = self.input.len().min(max_input_width as usize) as u16;
+            f.set_cursor_position((area.x + input_len + 1, area.y + 1));
         }
     }
 
